@@ -1,0 +1,89 @@
+## @file
+#  This module provides SPDK library implementation for NVMeof TCP.
+#
+#  Copyright (c) 2020, Dell EMC All rights reserved.
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = DxeSpdkLib
+  MODULE_UNI_FILE                = DxeSpdkLib.uni
+  FILE_GUID                      = ABBAB4CD-EA88-45b9-8234-C8A7450531FC
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  LIBRARY_CLASS                  = DxeSpdkLib
+
+#
+#  VALID_ARCHITECTURES           = X64
+#
+
+[Sources]
+# Do not change order
+  SpdkShim/sys_types.c
+  spdk/lib/util/crc16.c
+  spdk/lib/util/crc32.c
+  spdk/lib/util/crc32c.c
+  spdk/lib/util/bit_array.c
+  spdk/lib/nvme/nvme.c
+  spdk/lib/nvme/nvme_ctrlr_cmd.c
+  spdk/lib/nvme/nvme_ctrlr.c
+  spdk/lib/nvme/nvme_ctrlr_ocssd_cmd.c
+  spdk/lib/nvme/nvme_fabric.c
+  spdk/lib/nvme/nvme_io_msg.c
+  spdk/lib/nvme/nvme_ns.c
+  spdk/lib/nvme/nvme_ns_cmd.c
+  spdk/lib/nvme/nvme_ns_ocssd_cmd.c
+  spdk/lib/nvme/nvme_poll_group.c
+  spdk/lib/nvme/nvme_qpair.c
+  spdk/lib/nvme/nvme_quirks.c
+  spdk/lib/nvme/nvme_transport.c
+  spdk/lib/nvme/nvme_tcp.c
+  spdk/lib/nvme/nvme_transport.c
+  SpdkShim/pthread_shim.c
+  SpdkShim/json_write.c
+  spdk/lib/sock/sock.c
+  SpdkShim/edk_sock.c
+  SpdkShim/env.c
+  spdk/lib/util/dif.c
+  SpdkShim/uuid.c
+  spdk/lib/util/string.c
+  SpdkShim/std_string.c
+  SpdkShim/edk_log.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  NetworkPkg/NetworkPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  DebugLib
+  BaseMemoryLib
+  TimerLib
+  UefiBootServicesTableLib
+  MemoryAllocationLib
+  NetLib
+  TcpIoLib
+
+
+[Protocols]
+  gEfiTcp4ServiceBindingProtocolGuid            ## SOMETIMES_CONSUMES
+  gEfiTcp4ProtocolGuid                          ## SOMETIMES_CONSUMES
+  
+[Pcd]
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel              ## SOMETIMES_CONSUMES
+  
+[BuildOptions]
+# disable warning C4201: nonstandard extension used: nameless struct/union
+  MSFT:*_*_*_CC_FLAGS     = /wd4201
+  MSFT:*_*_*_CC_FLAGS     = /wd4204
+  MSFT:*_*_*_CC_FLAGS     = /wd4267
+  MSFT:*_*_*_CC_FLAGS     = /wd4244
+  MSFT:*_*_*_CC_FLAGS     = /wd4477
+  MSFT:*_*_*_CC_FLAGS     = /wd4245
+  MSFT:*_*_*_CC_FLAGS     = /nostdinc
+
+  GCC:*_*_*_CC_FLAGS      = -Wno-error=maybe-uninitialized
+  #*_*_*_CC_FLAGS =  -nostdinc -Wunused-function -nostdlib
+

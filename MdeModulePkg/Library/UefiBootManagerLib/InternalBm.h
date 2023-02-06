@@ -35,6 +35,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <Protocol/UsbIo.h>
 #include <Protocol/DiskInfo.h>
 #include <Protocol/NvmExpressPassthru.h>
+#include <Protocol/NvmeOFPassthru.h>
 #include <Protocol/IdeControllerInit.h>
 #include <Protocol/BootLogo.h>
 #include <Protocol/DriverHealth.h>
@@ -89,7 +90,8 @@ typedef enum {
   BmMessageSataBoot,
   BmMessageUsbBoot,
   BmMessageScsiBoot,
-  BmMiscBoot
+  BmMiscBoot,
+  BmMessageNvmeofBoot
 } BM_BOOT_TYPE;
 
 typedef

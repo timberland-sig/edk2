@@ -143,6 +143,13 @@ typedef struct {
   UINT8                       VendorDefinedData[1];
 } VENDOR_DEVICE_PATH_WITH_DATA;
 
+typedef struct {
+  EFI_DEVICE_PATH_PROTOCOL  Header;
+  UINT8                     Nidt;
+  UINT8                     Nid[16];
+  CHAR8                     TargetName[1];
+} NVMEOF_DEVICE_PATH_WITH_NAME;
+
 #pragma pack()
 
 /**

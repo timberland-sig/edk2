@@ -44,10 +44,11 @@
   # Network definition
   #
   DEFINE NETWORK_TLS_ENABLE             = FALSE
-  DEFINE NETWORK_IP6_ENABLE             = FALSE
+  DEFINE NETWORK_IP6_ENABLE             = TRUE
   DEFINE NETWORK_HTTP_BOOT_ENABLE       = FALSE
   DEFINE NETWORK_ALLOW_HTTP_CONNECTIONS = TRUE
   DEFINE NETWORK_ISCSI_ENABLE           = TRUE
+  DEFINE NETWORK_NVMEOF_ENABLE          = TRUE
 
 !include NetworkPkg/NetworkDefines.dsc.inc
 
@@ -273,6 +274,11 @@
   OrderedCollectionLib|MdePkg/Library/BaseOrderedCollectionRedBlackTreeLib/BaseOrderedCollectionRedBlackTreeLib.inf
 
 !include OvmfPkg/OvmfTpmLibs.dsc.inc
+
+!if $(NETWORK_NVMEOF_ENABLE) == TRUE 
+  ShellCommandLib|ShellPkg/Library/UefiShellCommandLib/UefiShellCommandLib.inf
+  HandleParsingLib|ShellPkg/Library/UefiHandleParsingLib/UefiHandleParsingLib.inf
+!endif
 
 [LibraryClasses.common]
   BaseCryptLib|CryptoPkg/Library/BaseCryptLib/BaseCryptLib.inf

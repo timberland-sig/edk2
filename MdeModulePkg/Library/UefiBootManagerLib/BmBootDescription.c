@@ -98,6 +98,10 @@ BmDevicePathType (
           case MSG_SCSI_DP:
             return BmMessageScsiBoot;
             break;
+	
+          case MSG_NVMEOF_DP:
+            return BmMessageNvmeofBoot;
+            break;
         }
     }
   }
@@ -675,6 +679,66 @@ BmGetNvmeDescription (
 }
 
 /**
+  Return the boot description for NVMEOF boot device.
+
+  @param Handle                Controller handle.
+
+  @return  The description string.
+**/
+CHAR16 *
+BmGetNvmeofDescription(
+  IN EFI_HANDLE                      Handle
+)
+{
+  EFI_STATUS                   Status;
+  EFI_DEVICE_PATH_PROTOCOL     *DevicePath;
+  CHAR16                       *Description;
+  CHAR16                       DiskDesc[256];
+  NVMEOF_PASSTHROUGH_PROTOCOL  *Bm;
+  EFI_DEVICE_PATH_PROTOCOL     *Node;
+  BOOLEAN                      Found = FALSE;
+
+  DevicePath = DevicePathFromHandle (Handle);
+  if (DevicePath == NULL) {
+    return NULL;
+  }
+
+  for (Node = DevicePath; !IsDevicePathEndType(Node); Node = NextDevicePathNode(Node)) {
+    if ((DevicePathType(Node) == MESSAGING_DEVICE_PATH) &&
+      (DevicePathSubType(Node) == MSG_NVMEOF_DP)) {
+      //
+      // Do not return description when the Handle is not a child of NVME controller.
+      //
+      Found = TRUE;
+      break;
+    }
+  }
+
+  if (!Found) {
+    return NULL;
+  }
+
+  Status = gBS->LocateProtocol (
+    &gNvmeofPassThroughProtocolGuid,
+    NULL,
+    (VOID **)&Bm
+  ); 
+  if (Status != EFI_SUCCESS) {
+    return NULL;
+  }
+
+  Bm->GetBootDesc (Handle, DiskDesc);
+
+  Description = AllocateZeroPool (sizeof (DiskDesc));
+  if (Description != NULL) {
+    CopyMem (Description, L"NVMeOF Device - ", 16 * sizeof (CHAR16));
+    CopyMem (Description + 16, DiskDesc, sizeof (DiskDesc) - (16 * sizeof (CHAR16)));
+    BmEliminateExtraSpaces (Description);
+  }
+  return Description;
+}
+
+/**
   Return the boot description for the controller based on the type.
 
   @param Handle                Controller handle.
@@ -721,7 +785,11 @@ BmGetMiscDescription (
       } else {
         Description = L"Misc Device";
       }
+      break;
 
+    case BmMessageNvmeofBoot:
+      //Description = L"NVMeOF Device";
+      return NULL;
       break;
 
     default:
@@ -784,7 +852,8 @@ BM_GET_BOOT_DESCRIPTION  mBmBootDescriptionHandlers[] = {
   BmGetNetworkDescription,
   BmGetLoadFileDescription,
   BmGetNvmeDescription,
-  BmGetMiscDescription
+  BmGetMiscDescription,
+  BmGetNvmeofDescription
 };
 
 /**

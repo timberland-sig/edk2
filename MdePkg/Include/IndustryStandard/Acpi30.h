@@ -718,6 +718,11 @@ typedef struct {
 ///
 #define EFI_ACPI_3_0_ISCSI_BOOT_FIRMWARE_TABLE_SIGNATURE  SIGNATURE_32('i', 'B', 'F', 'T')
 
+///
+/// "nBFT" NVMeOF Boot Firmware Table
+///
+#define EFI_ACPI_3_0_NVMEOF_BFT_SIGNATURE  SIGNATURE_32('N', 'B', 'F', 'T')
+
 #pragma pack()
 
 #endif

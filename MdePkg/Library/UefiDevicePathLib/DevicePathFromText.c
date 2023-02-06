@@ -2635,6 +2635,40 @@ DevPathFromTextiSCSI (
 }
 
 /**
+  Converts a text device path node to NVMeOF device path structure.
+  @param TextDeviceNode  The input Text device path node.
+  @return A pointer to the newly-created NVMeOF device path structure.
+**/
+EFI_DEVICE_PATH_PROTOCOL *
+DevPathFromTextNvmeOf(
+  IN CHAR16 *TextDeviceNode
+)
+{
+  CHAR8                        *AsciiStr;
+  CHAR16                      *NameStr;
+  NVMEOF_DEVICE_PATH_WITH_NAME *NvmeOfDevPath;
+  CHAR16                       *NidStr;
+  UINT64                       Nid;
+
+  NameStr = GetNextParamStr(&TextDeviceNode);
+  NidStr = GetNextParamStr(&TextDeviceNode);
+
+  NvmeOfDevPath = (NVMEOF_DEVICE_PATH_WITH_NAME *)CreateDeviceNode(
+    MESSAGING_DEVICE_PATH,
+    MSG_NVMEOF_DP,
+    (UINT16)(sizeof(NVMEOF_DEVICE_PATH_WITH_NAME) + StrLen(NameStr))
+  );
+
+  AsciiStr = NvmeOfDevPath->TargetName;
+  StrToAscii(NameStr, &AsciiStr);
+
+  Strtoi64(NidStr, &Nid);
+  WriteUnaligned64((UINT64 *) &NvmeOfDevPath->Nid, SwapBytes64(Nid));
+
+  return (EFI_DEVICE_PATH_PROTOCOL *)NvmeOfDevPath;
+}
+
+/**
   Converts a text device path node to VLAN device path structure.
 
   @param TextDeviceNode  The input Text device path node.
@@ -3539,6 +3573,7 @@ GLOBAL_REMOVE_IF_UNREFERENCED DEVICE_PATH_FROM_TEXT_TABLE  mUefiDevicePathLibDev
   { L"UsbWwid",                 DevPathFromTextUsbWwid                 },
   { L"Unit",                    DevPathFromTextUnit                    },
   { L"iSCSI",                   DevPathFromTextiSCSI                   },
+  { L"NVMeOF",                  DevPathFromTextNvmeOf                  },
   { L"Vlan",                    DevPathFromTextVlan                    },
   { L"Dns",                     DevPathFromTextDns                     },
   { L"Uri",                     DevPathFromTextUri                     },

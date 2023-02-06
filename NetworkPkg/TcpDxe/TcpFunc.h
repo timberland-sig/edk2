@@ -616,6 +616,29 @@ TcpRxCallback (
   );
 
 /**
+  Packet transmit callback function provided to IP_IO.
+  Used to react to transmit problems happening at lower layers
+  (e.g. cable detach or device errors coming from SNP).
+
+  This function will not be called by IP_IO unless TCP_CB pointer
+  was not supplied in IpIoSend() NotifyData parameter.
+
+  @param[in] Status         Result of a transmit issued through IP_IO.
+  @param[in] Context        Ignored. NULL.
+  @param[in] Sender         Pointer to IP protocol used to transmit a packet.
+  @param[in] NotifyData     Pointer to TCP Control Block associated with
+                            the Tx request.
+**/
+VOID
+EFIAPI
+TcpTxCallback (
+  IN EFI_STATUS         Status,
+  IN VOID               *Context,
+  IN IP_IO_IP_PROTOCOL  Sender,
+  IN VOID               *NotifyData
+  );
+
+/**
   Send the segment to IP via IpIo function.
 
   @param[in]  Tcb                Pointer to the TCP_CB of this TCP instance.

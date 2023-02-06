@@ -1,0 +1,119 @@
+## @file
+#  NVM eOf Host Controller Module.
+#
+#  NvmeOfDxe driver is used to manage non-volatile memory subsystem which follows
+#  NVMeOf specification.
+#
+#  Copyright (c) 2020, Dell EMC All rights reserved
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = NvmeOfDxe
+  MODULE_UNI_FILE                = NvmeOfDxe.uni
+  FILE_GUID                      = eb487413-0480-4c92-9f17-d19482d325d5
+  MODULE_TYPE                    = UEFI_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = NvmeOfDriverEntry
+  UNLOAD_IMAGE                   = NvmeOfDriverUnload
+
+#
+# The following information is for reference only and not required by the build tools.
+#
+#  VALID_ARCHITECTURES           = X64
+#
+#  DRIVER_BINDING                =  gNvmeOfDriverBinding
+#  COMPONENT_NAME                =  gNvmeOfComponentName
+#  COMPONENT_NAME2               =  gNvmeOfComponentName2
+
+[Sources]
+  NvmeOfDriver.c
+  NvmeOfMisc.c
+  NvmeOfMisc.h
+  NvmeOfImpl.h
+  NvmeOfDriver.h
+  ComponentName.c
+  NvmeOfDns.c
+  NvmeOfDns.h
+  NvmeOfSpdk.c
+  NvmeOfDhcp.c
+  NvmeOfDhcp.h
+  NvmeOfDhcp6.c
+  NvmeOfDhcp6.h
+  NvmeOfBlockIo.c
+  NvmeOfBlockIo.h
+  NvmeOfDeviceInfo.c
+  NvmeOfDeviceInfo.h
+  NvmeOfCliInterface.c
+  NvmeOfCliInterface.h
+  NvmeOfNbft.c
+  NvmeOfNbft.h
+  
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  NetworkPkg/NetworkPkg.dec
+
+[LibraryClasses]
+  BaseMemoryLib
+  BaseLib
+  DebugLib
+  DevicePathLib
+  MemoryAllocationLib
+  NetLib
+  TcpIoLib
+  UefiDriverEntryPoint
+  UefiBootServicesTableLib
+  UefiLib
+  PrintLib
+  ReportStatusCodeLib
+  DxeSpdkLib
+
+[Protocols]
+  gEfiPciIoProtocolGuid                         ## TO_START
+  gEfiIp4Config2ProtocolGuid                    ## SOMETIMES_CONSUMES
+  gEfiIp6ConfigProtocolGuid                     ## SOMETIMES_CONSUMES
+  gEfiTcp4ProtocolGuid                          ## TO_START
+  gEfiTcp6ProtocolGuid                          ## TO_START
+  gEfiTcp4ServiceBindingProtocolGuid            ## TO_START
+  gEfiTcp6ServiceBindingProtocolGuid            ## TO_START
+  gEfiDhcp4ProtocolGuid                         ## SOMETIMES_CONSUMES
+  gEfiDhcp4ServiceBindingProtocolGuid           ## SOMETIMES_CONSUMES
+  gEfiDhcp6ProtocolGuid                         ## SOMETIMES_CONSUMES
+  gEfiDhcp6ServiceBindingProtocolGuid           ## SOMETIMES_CONSUMES
+  gEfiDns4ServiceBindingProtocolGuid            ## SOMETIMES_CONSUMES
+  gEfiDns4ProtocolGuid                          ## SOMETIMES_CONSUMES
+  gEfiDns6ServiceBindingProtocolGuid            ## SOMETIMES_CONSUMES
+  gEfiDns6ProtocolGuid                          ## SOMETIMES_CONSUMES
+  gEfiDevicePathProtocolGuid
+  gEfiBlockIoProtocolGuid                       ## BY_START
+  gEfiBlockIo2ProtocolGuid                      ## BY_START
+  gEfiDiskInfoProtocolGuid                      ## BY_START
+  gEfiStorageSecurityCommandProtocolGuid        ## BY_START
+  gEfiAcpiTableProtocolGuid                     ## SOMETIMES_CONSUMES
+  gNvmeofPassThroughProtocolGuid                ## PRODUCES
+
+[Guids]
+  gNvmeOfConfigGuid
+  gEfiAcpiTableGuid
+  gEfiAcpi10TableGuid
+  gEfiEventExitBootServicesGuid
+  gEfiEventBeforeExitBootServicesGuid
+  
+[Pcd]
+  gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultCreatorId        ## SOMETIMES_CONSUMES
+  gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultCreatorRevision  ## SOMETIMES_CONSUMES
+  
+[BuildOptions]
+# disable warning C4201: nonstandard extension used: nameless struct/union
+  MSFT:*_*_*_CC_FLAGS     = /wd4201
+  MSFT:*_*_*_CC_FLAGS     = /wd4204
+  MSFT:*_*_*_CC_FLAGS     = /wd4267
+  MSFT:*_*_*_CC_FLAGS     = /wd4244
+  MSFT:*_*_*_CC_FLAGS     = /wd4477
+  MSFT:*_*_*_CC_FLAGS     = /wd4245
+  MSFT:*_*_*_CC_FLAGS     = /wd4133
+  

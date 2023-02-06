@@ -1,0 +1,82 @@
+## @file
+#  NVMeOF CLI INF file
+#
+#  NvmeOfDxe driver is used to manage non-volatile memory subsystem which follows
+#  NVMeOf specification.
+#
+#  Copyright (c) 2020, Dell EMC All rights reserved
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = NvmeOfCli
+  MODULE_UNI_FILE                = NvmeOfCli.uni
+  FILE_GUID                      = 556bea8e-37d5-4b3b-8eb3-44ea331ca011
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = ShellCEntryLib
+
+#
+#  This flag specifies whether HII resource section is generated into PE image.
+#
+  UEFI_HII_RESOURCE_SECTION      = TRUE
+# The following information is for reference only and not required by the build tools.
+#
+#  VALID_ARCHITECTURES           = X64
+#
+
+[Sources]
+  NvmeOfCli.c
+  NvmeOfCmdHelp.c
+  NvmeOfCmdHelp.h
+  NvmeOfParser.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  NetworkPkg/NetworkPkg.dec
+  ShellPkg/ShellPkg.dec
+  OvmfPkg/OvmfPkg.dec
+
+[LibraryClasses]
+  UefiApplicationEntryPoint
+  UefiLib
+  PcdLib
+  ShellLib
+  ShellCommandLib	
+  ShellCEntryLib
+  BaseMemoryLib
+  BaseLib
+  UefiBootServicesTableLib
+  UefiRuntimeServicesTableLib
+
+[Protocols]
+  gEfiUnicodeCollation2ProtocolGuid                       # ALWAYS_CONSUMED
+  gEfiShellProtocolGuid                                   # ALWAYS_CONSUMED
+  gEfiShellParametersProtocolGuid                         # ALWAYS_CONSUMED
+  gEfiDevicePathProtocolGuid                              # ALWAYS_CONSUMED
+  gEfiLoadedImageProtocolGuid                             # ALWAYS_CONSUMED
+  gEfiSimpleFileSystemProtocolGuid                        # ALWAYS_CONSUMED
+  gEfiDevicePathToTextProtocolGuid                        # ALWAYS_CONSUMED
+  gEfiBlockIoProtocolGuid                                 # CONSUMES
+  gEfiDiskIoProtocolGuid                                  # CONSUMES
+  gEfiBlockIo2ProtocolGuid                                # CONSUMES
+  gEfiDiskIo2ProtocolGuid                                 # CONSUMES
+  gNvmeofPassThroughProtocolGuid                          # CONSUMES
+
+[FeaturePcd]
+
+[Pcd.common]
+  gEfiShellPkgTokenSpaceGuid.PcdShellSupportLevel         # ALWAYS_CONSUMED
+  gEfiShellPkgTokenSpaceGuid.PcdShellFileOperationSize    # ALWAYS_CONSUMED
+  gEfiMdePkgTokenSpaceGuid.PcdUefiVariableDefaultPlatformLang
+  gEfiMdePkgTokenSpaceGuid.PcdUefiVariableDefaultPlatformLangCodes
+
+[Guids]
+  gNvmeOfConfigGuid
+
+[UserExtensions.TianoCore."ExtraFiles"]
+  NvmeOfCli.uni

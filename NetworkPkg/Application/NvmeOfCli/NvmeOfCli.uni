@@ -1,0 +1,16 @@
+// /** @file
+// NVMeOF Host CLI program
+//
+//
+// Copyright (c) 2020, Dell EMC All rights reserved
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+// **/
+
+#string STR_MODULE_ABSTRACT             #language en-US "NVMeOF UEFI CLI"
+
+
+
+#string STR_MODULE_DESCRIPTION          #language en-US "This is a shell application that will used for testing of NVMeOF Driver"
+
+

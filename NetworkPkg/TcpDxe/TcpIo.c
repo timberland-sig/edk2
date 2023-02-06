@@ -46,6 +46,39 @@ TcpRxCallback (
 }
 
 /**
+  Packet transmit callback function provided to IP_IO.
+  Used to react to transmit problems happening at lower layers
+  (e.g. cable detach or device errors coming from SNP).
+
+  This function will not be called by IP_IO unless TCP_CB pointer
+  was not supplied in IpIoSend() NotifyData parameter.
+
+  @param[in] Status         Result of a transmit issued through IP_IO.
+  @param[in] Context        Ignored. NULL.
+  @param[in] Sender         Pointer to IP protocol used to transmit a packet.
+  @param[in] NotifyData     Pointer to TCP Control Block associated with
+                            the Tx request.
+**/
+VOID
+EFIAPI
+TcpTxCallback (
+  IN EFI_STATUS         Status,
+  IN VOID               *Context,
+  IN IP_IO_IP_PROTOCOL  Sender,
+  IN VOID               *NotifyData
+  )
+{
+  TCP_CB    *Tcb;
+
+  Tcb = (TCP_CB*)NotifyData;
+
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "TcpTxCallback: Tx error reported: %r\n", Status));
+    TcpClose (Tcb);
+  }
+}
+
+/**
   Send the segment to IP via IpIo function.
 
   @param[in]  Tcb                Pointer to the TCP_CB of this TCP instance.
@@ -125,7 +158,7 @@ TcpSendIpPacket (
     Override.Ip6OverrideData.FlowLabel = 0;
   }
 
-  Status = IpIoSend (IpIo, Nbuf, IpSender, NULL, NULL, Dest, &Override);
+  Status = IpIoSend (IpIo, Nbuf, IpSender, NULL, Tcb, Dest, &Override);
 
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "TcpSendIpPacket: return %r error\n", Status));

@@ -61,4 +61,11 @@
   !if $(NETWORK_ISCSI_ENABLE) == TRUE
     NetworkPkg/IScsiDxe/IScsiDxe.inf
   !endif
+
+  !if $(NETWORK_NVMEOF_ENABLE) == TRUE
+    NetworkPkg/NvmeOfDxe/NvmeOfDxe.inf
+    NetworkPkg/Application/NvmeOfCli/NvmeOfCli.inf
+    NetworkPkg/DnsDxe/DnsDxe.inf
+  !endif
+
 !endif

@@ -880,6 +880,65 @@ DevPathSerialIScsi (
 }
 
 /**
+  DevicePathNode must be SerialNvmeOf type and this will populate the MappingItem.
+
+  @param[in] DevicePathNode   The node to get info on.
+  @param[in] MappingItem      The info item to populate.
+  @param[in] DevicePath       Ignored.
+
+  @retval EFI_OUT_OF_RESOURCES    Out of resources.
+  @retval EFI_SUCCESS             The appending was successful.
+**/
+EFI_STATUS
+DevPathSerialNvmeOf(
+  IN EFI_DEVICE_PATH_PROTOCOL     *DevicePathNode,
+  IN DEVICE_CONSIST_MAPPING_INFO  *MappingItem,
+  IN EFI_DEVICE_PATH_PROTOCOL     *DevicePath
+)
+{
+  EFI_STATUS         Status;
+  NVMEOF_DEVICE_PATH *NvmeOf;
+  UINT8              *NvmeOfTargetName;
+  CHAR16             *TargetName;
+  UINTN              TargetNameLength;
+  UINTN              Index;
+  CHAR16            Buffer[64];
+  CHAR16            *PBuffer;
+
+  ASSERT(DevicePathNode != NULL);
+  ASSERT(MappingItem != NULL);
+
+  Status = EFI_SUCCESS;
+
+  NvmeOf = (NVMEOF_DEVICE_PATH  *)DevicePathNode;
+
+  for (Index = 0, PBuffer = Buffer; Index < 16; Index++, PBuffer += 1) {
+    UnicodeSPrint(PBuffer, 0, L"%02x", (UINTN)NvmeOf->NamespaceUuid[Index]);
+  }
+
+  Status = AppendCSDStr(MappingItem, Buffer);
+  if (EFI_ERROR(Status)) {
+    return Status;
+  }
+  TargetNameLength = DevicePathNodeLength(DevicePathNode) - sizeof(NVMEOF_DEVICE_PATH);
+  if (TargetNameLength > 0) {
+    TargetName = AllocateZeroPool((TargetNameLength + 1) * sizeof(CHAR16));
+    if (TargetName == NULL) {
+      Status = EFI_OUT_OF_RESOURCES;
+    }
+    else {
+      NvmeOfTargetName = (UINT8 *)(NvmeOf + 1);
+      for (Index = 0; Index < TargetNameLength; Index++) {
+        TargetName[Index] = (CHAR16)NvmeOfTargetName[Index];
+      }
+      Status = AppendCSDStr(MappingItem, TargetName);
+      FreePool(TargetName);
+    }
+  }
+  return Status;
+}
+
+/**
   DevicePathNode must be SerialI20 type and this will populate the MappingItem.
 
   @param[in] DevicePathNode   The node to get info on.
@@ -1316,6 +1375,12 @@ DEV_PATH_CONSIST_MAPPING_TABLE  DevPathConsistMappingTable[] = {
     MESSAGING_DEVICE_PATH,
     MSG_ISCSI_DP,
     DevPathSerialIScsi,
+    DevPathCompareDefault
+  },
+  {
+    MESSAGING_DEVICE_PATH,
+    MSG_NVMEOF_DP,
+    DevPathSerialNvmeOf,
     DevPathCompareDefault
   },
   {

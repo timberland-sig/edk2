@@ -68,6 +68,14 @@ typedef struct _EFI_DISK_INFO_PROTOCOL EFI_DISK_INFO_PROTOCOL;
   }
 
 ///
+/// Global ID for a NVMeOF interface.  Used to fill in EFI_DISK_INFO_PROTOCOL.Interface
+/// 
+#define EFI_DISK_INFO_NVMEOF_INTERFACE_GUID \
+  { \
+    0xf6b7526a, 0x93c1, 0x4de2, {0x93, 0xc0, 0xfb, 0x6c, 0x73, 0x9c, 0x0b, 0x91 } \
+  }
+
+///
 /// Global ID for a UFS interface.  Used to fill in EFI_DISK_INFO_PROTOCOL.Interface
 ///
 #define EFI_DISK_INFO_UFS_INTERFACE_GUID \

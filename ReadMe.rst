@@ -5,6 +5,8 @@ EDK II Project
 A modern, feature-rich, cross-platform firmware development
 environment for the UEFI and PI specifications from www.uefi.org.
 
+   
+
 Core CI Build Status
 --------------------
 
@@ -382,3 +384,191 @@ use.
 .. |op3264fru| image:: https://dev.azure.com/tianocore/edk2-ci/_apis/build/status/PlatformCI_OvmfPkg_Ubuntu_GCC5_CI?branchName=master&jobName=Platform_CI&configuration=Platform_CI%20OVMF_IA32X64_FULL_RELEASE
 .. |op3264fn| replace:: |TCBZ_2661|_
 .. |op3264fnu| image:: https://dev.azure.com/tianocore/edk2-ci/_apis/build/status/PlatformCI_OvmfPkg_Ubuntu_GCC5_CI?branchName=master&jobName=Platform_CI&configuration=Platform_CI%20OVMF_IA32X64_FULL_NOOPT
+
+
+
+EDK2 Build steps for Windows and Linux
+----------------------------------------
+
+Linux Build Steps using OVMF
+----------------------------
+
+System Requirements
+
+Ubuntu 20.04 desktop on X86_64 machine 
+Pre-requsite
+::
+   sudo apt-get install build-essential git uuid-dev iasl nasm
+   sudo apt-get install  uuid-dev iasl
+   sudo apt install libx11-dev
+   sudo apt-get install libxext-dev
+
+Source Building
+
+Initialise Git enviornment:
+::
+   mkdir edk2
+   git clone https://github.com/tianocore/edk2.git
+   cd edk2
+   git submodule update --init
+   make -C BaseTools
+   . edksetup.sh
+
+
+The above steps will initialise git and compile Basetools required for
+edk2 compilation and it copies the default configuration in Conf directory 
+
+ In case the terminal window get closed or new shell is
+ started re-run “. edksetup.sh”
+
+Change the following in Conf/target.txt
+
+ACTIVE_PLATFORM = OvmfPkg/OvmfPkgX64.dsc
+
+TARGET_ARCH = X64
+
+TOOL_CHAIN_TAG = GCC5
+
+Now execute the build command
+
+::
+
+ build
+ 
+
+This will create Build directory and will build the omvf.fd file
+
+
+Windows Build Steps using Emulator
+----------------------------------
+
+Make sure Visual Studio 2017 is installed on system as required for EDK2 with minimum following
+packages:
+
+-  Visual C++
+-  Makefile
+-  Python
+
+
+
+Download and Install git from
+
+https://git-scm.com/download/win
+
+EDK2 emulator Pre-requisite: 
+
+- NetNt32 for networking
+- NASM 
+- ASL
+
+Installing NetNt32 Networking for Emulator
+``````````````````````````````````````````
+
+Download emulator NetNt32 package and WinPcap developer’s package (One
+time steps) Open windows command prompt and execute following:
+
+::
+
+   mkdir c:\edk2-NetNt
+   cd edk2-NetNt
+
+NetNt32 network package installation
+````````````````````````````````````
+
+Open Git-Bash and execute the following in edk2-NetNt directory
+::
+
+   git clone https://github.com/tianocore/edk2-NetNt32Io.git
+   
+   
+Download WinPcap developer package and unzip it locally
+
+https://www.winpcap.org/install/bin/WpdPack_4_1_2.zip
+
+- Copy the WpdPack directory from WinPcap and place it at the same level of edk-netNet32Io’s “Src” directory
+
+- Open the Makefile of edk-netNet32Io and change default arch to X64
+
+In the command prompt execute the following
+
+::
+
+   cd  C:\edk2-NetNt\edk2-NetNt32Io
+   call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+   nmake /f Makefile
+   exit
+
+Note:The path may change depending on your version and type of Visual Studio
+ 
+This will compile SnpNt32Io.dll in Debug_X64 , which will be using this
+file later for running emulator with network support
+
+Nasm Installation
+`````````````````
+
+Download NASM from following location and make sure its installed to C:\\Program Files\\NASM\
+
+https://www.nasm.us/pub/nasm/releasebuilds/2.15.05/win64/nasm-2.15.05-installer-x64.exe
+
+
+ASL Installation
+````````````````
+
+Download ASL from following location and install it to its default location of c:\ASL
+
+https://acpica.org/downloads/binary-tools
+
+Edk compilation steps
+`````````````````````
+
+Initialise Git enviornment:
+
+::
+
+   mkdir edk2
+   git clone https://github.com/tianocore/edk2.git
+   cd edk2
+   git submodule update --init
+
+
+In edk2 directory level run the following commands to build buildtools
+in 32 bit environment Open new command prompt and change directory to
+edk2 level
+
+::
+
+  edksetup.bat rebuild VS2017
+
+
+Now switch to 64 bit mode 
+
+ Path may change depending on your version of VS
+
+
+::
+
+   call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+   set NASM_PREFIX="C:\Program Files\NASM\"
+   set PYTHON_HOME="C:\Program Files (x86)\Microsoft Visual Studio\Shared\Python36_64"
+   edksetup.bat VS2017
+
+
+This will copy defaults to Conf folder, change the following in
+Conf/target.txt: TARGET_ARCH = X64
+
+::
+
+   build -t VS2017
+
+
+Emulator will get built in Build\\EmulatorX64\\DEBUG_VS2017\\X64 
+
+Now manually copy the "SnpNt32Io.dll" i.e c:\\edk2-NetNt\\edk2-NetNt32Io\\Debug_X64\\SnpNt32Io.dll to emulator build directory Build\\EmulatorX64\\DEBUG_VS2017\\X64 and then execute winhost to start the emulator.
+
+::
+
+ cd Build\EmulatorX64\DEBUG_VS2017\X64 
+ winhost.exe
+
+
+Now start emulator using winhost.exe

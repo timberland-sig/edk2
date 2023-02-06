@@ -21,3 +21,4 @@
   # HTTP applications.
   HttpLib|NetworkPkg/Library/DxeHttpLib/DxeHttpLib.inf
   HttpIoLib|NetworkPkg/Library/DxeHttpIoLib/DxeHttpIoLib.inf
+  DxeSpdkLib|NetworkPkg/Library/DxeSpdkLib/DxeSpdkLib.inf
