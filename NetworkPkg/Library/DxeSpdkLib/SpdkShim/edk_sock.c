@@ -56,44 +56,55 @@ VOID
 EFIAPI
 edk_sock_rx_notify (
   IN EFI_EVENT	Event,
-  IN VOID		*Context
+  IN VOID	*Context
   )
 {
-  struct spdk_edk_sock *EdkSock;
+  struct spdk_edk_sock *sock;
   ASSERT (Event != NULL);
   ASSERT (Context != NULL);
 
-  EdkSock = (struct spdk_edk_sock*)Context;
+  sock = (struct spdk_edk_sock*)Context;
 
   // SPDK_NOTICELOG ("Receive event triggered.\n");
-  // SPDK_NOTICELOG ("Status: %r\n", EdkSock->RxToken.CompletionToken.Status);
-  EdkSock->RxPending = TRUE;
+  // SPDK_NOTICELOG ("Status: %r\n", sock->RxToken.Tcp4Token.CompletionToken.Status);
+  sock->RxPending = TRUE;
+  return;
 }
 
 EFI_STATUS
 edk_sock_setup_rx_token (
-  IN struct spdk_edk_sock *edk_sock
+  IN struct spdk_edk_sock *sock
   )
 {
   EFI_STATUS	Status;
+  TCP_IO	*TcpIo;
+
+  TcpIo = &sock->TcpIo;
 
   // Prepare TCP Rx token
-  edk_sock->RxData.DataLength     = edk_sock->RxFragment->Len;
-  edk_sock->RxData.FragmentCount  = 1;
-  edk_sock->RxData.FragmentTable[0].FragmentLength = edk_sock->RxFragment->Len;
-  edk_sock->RxData.FragmentTable[0].FragmentBuffer = edk_sock->RxFragment->Bulk;
+  sock->RxData.DataLength     = sock->RxFragment->Len;
+  sock->RxData.FragmentCount  = 1;
+  sock->RxData.FragmentTable[0].FragmentLength = sock->RxFragment->Len;
+  sock->RxData.FragmentTable[0].FragmentBuffer = sock->RxFragment->Bulk;
 
-  edk_sock->RxToken.Packet.RxData = &edk_sock->RxData;
-  edk_sock->RxHead                = 0;
+  sock->RxToken.Tcp4Token.Packet.RxData = &sock->RxData;
+  sock->RxHead                = 0;
 
-  edk_sock->RxToken.CompletionToken.Event = edk_sock->RxEvent;
+  sock->RxToken.Tcp4Token.CompletionToken.Event = sock->RxEvent;
 
   // Put the packet on receive.
-  edk_sock->RxPending = FALSE;
-  Status = edk_sock->TcpIo.Tcp.Tcp4->Receive (
-                                       edk_sock->TcpIo.Tcp.Tcp4,
-                                       &edk_sock->RxToken
-                                       );
+  sock->RxPending = FALSE;
+  if (TcpIo->TcpVersion == TCP_VERSION_4) {
+      Status = sock->TcpIo.Tcp.Tcp4->Receive (
+                                           TcpIo->Tcp.Tcp4,
+                                           &sock->RxToken.Tcp4Token
+                                          );
+  } else {
+     Status = sock->TcpIo.Tcp.Tcp6->Receive (
+                                           TcpIo->Tcp.Tcp6,
+                                           &sock->RxToken.Tcp6Token
+                                          );
+  }
 
   return Status;
 }
@@ -236,8 +247,19 @@ edk_sock_connect (
     sock->MaxPduLen = Ip4Config.MaxPacketSize - sizeof (TCP_HEAD);
     SPDK_NOTICELOG ("sock->MaxPduLen: %d\n", sock->MaxPduLen);
   } else {
-    // IPv6 TBD
-    ASSERT (FALSE);
+    EFI_IP6_MODE_DATA 	Ip6Config;
+    Status = TcpIo->Tcp.Tcp6->GetModeData (
+                                TcpIo->Tcp.Tcp6,
+                                NULL,
+                                NULL,
+                                &Ip6Config,
+                                NULL,
+                                NULL
+                                );
+    ASSERT_EFI_ERROR (Status);
+    SPDK_NOTICELOG ("IPv6 MaxPacketSize: %d\n", Ip6Config.MaxPacketSize);
+    sock->MaxPduLen = Ip6Config.MaxPacketSize - sizeof (TCP_HEAD);
+    SPDK_NOTICELOG ("sock->MaxPduLen: %d\n", sock->MaxPduLen);
   }
 
   // Allocate Rx PDU.
@@ -322,16 +344,17 @@ edk_sock_close (
   struct spdk_edk_sock *sock  = __edk_sock(_sock);
   TCP_IO               *TcpIo;
   EFI_TCP4_PROTOCOL    *Tcp4;
+  EFI_TCP6_PROTOCOL    *Tcp6;
 
   TcpIo = &sock->TcpIo;
 
   // Cancel Rx token
-  if (sock->TcpIo.TcpVersion == TCP_VERSION_4) {
-    Tcp4 = TcpIo->Tcp.Tcp4;
-    Tcp4->Cancel (Tcp4, &sock->RxToken.CompletionToken);
+  if (TcpIo->TcpVersion == TCP_VERSION_4) {
+      Tcp4 = TcpIo->Tcp.Tcp4;
+      Tcp4->Cancel (Tcp4, &sock->RxToken.Tcp4Token.CompletionToken);
   } else {
-    // IPv6 TBD
-    ASSERT(FALSE);
+      Tcp6 = TcpIo->Tcp.Tcp6;
+      Tcp6->Cancel (Tcp6, &sock->RxToken.Tcp6Token.CompletionToken);
   }
 
   // Cleanup Rx context
@@ -351,10 +374,10 @@ edk_sock_close (
 
 int
 _sock_flush (
-  struct spdk_sock *sock
+  struct spdk_sock *s_sock
   )
 {
-  struct spdk_edk_sock      *psock = __edk_sock (sock);
+  struct spdk_edk_sock      *sock = __edk_sock (s_sock);
   int                       retval = 0;
   EFI_STATUS                Status = EFI_SUCCESS;
   struct iovec              iovs[64];
@@ -369,14 +392,14 @@ _sock_flush (
   UINT8                     *Packet = NULL;
   int                       req_counter = 0;
 
-  if (sock->cb_cnt > 0) {
-      SPDK_ERRLOG("cb_cnt > 0 : %d\n", sock->cb_cnt);
+  if (s_sock->cb_cnt > 0) {
+      SPDK_ERRLOG("cb_cnt > 0 : %d\n", s_sock->cb_cnt);
       return 0;
   }
 
   /* Gather an iov */
   iovcnt = 0;
-  req = TAILQ_FIRST (&sock->queued_reqs);
+  req = TAILQ_FIRST (&s_sock->queued_reqs);
   while (req) {
       if ((iovcnt + req->iovcnt)  > IOV_BATCH_SIZE) {
           break;
@@ -456,7 +479,7 @@ _sock_flush (
   //
   // Send it to the NvmeOf target.
   //
-  Status = TcpIoTransmit (&psock->TcpIo, Pdu);
+  Status = TcpIoTransmit (&sock->TcpIo, Pdu);
   if (EFI_ERROR (Status)) {
       SPDK_ERRLOG ("Error while TcpIoTransmit .%d\n", Status);
       retval = -1;
@@ -467,15 +490,15 @@ _sock_flush (
 
   SPDK_DEBUGLOG (nvme, "Transmit Complete\n");
 
-  req = TAILQ_FIRST (&sock->queued_reqs);
+  req = TAILQ_FIRST (&s_sock->queued_reqs);
   for (index = 0; index < req_counter; index++) {
-      sock->cb_cnt++;
+      s_sock->cb_cnt++;
       req->cb_fn (req->cb_arg, 0);
-      TAILQ_REMOVE (&sock->queued_reqs, req, internal.link);
-      sock->cb_cnt--;
-      sock->queued_iovcnt -= req->iovcnt;
-      if (sock->queued_iovcnt < 0) {
-          sock->queued_iovcnt = 0;
+      TAILQ_REMOVE (&s_sock->queued_reqs, req, internal.link);
+      s_sock->cb_cnt--;
+      s_sock->queued_iovcnt -= req->iovcnt;
+      if (s_sock->queued_iovcnt < 0) {
+          s_sock->queued_iovcnt = 0;
       }
       req = TAILQ_NEXT (req, internal.link);
   }
@@ -487,26 +510,26 @@ _sock_flush (
 
 void
 edk_sock_writev_async (
-  struct spdk_sock         *sock, 
+  struct spdk_sock         *s_sock,
   struct spdk_sock_request *req
   )
 {
   int rc = 0;
 
-  spdk_sock_request_queue (sock, req);
+  spdk_sock_request_queue (s_sock, req);
 
   /* If there are a sufficient number queued, just flush them out immediately. */
-  if (sock->queued_iovcnt >= IOV_BATCH_SIZE) {
-      rc = _sock_flush (sock);
+  if (s_sock->queued_iovcnt >= IOV_BATCH_SIZE) {
+      rc = _sock_flush (s_sock);
       if (rc) {
-          spdk_sock_abort_requests (sock);
+          spdk_sock_abort_requests (s_sock);
       }
   }
 }
 
 static ssize_t
 edk_sock_writev (
-  struct spdk_sock *_sock, 
+  struct spdk_sock *s_sock,
   struct iovec *iov, 
   int iovcnt
   )
@@ -516,24 +539,26 @@ edk_sock_writev (
 
 int
 edk_sock_flush (
-  struct spdk_sock *_sock
+  struct spdk_sock *s_sock
   )
 {
-  return _sock_flush (_sock);
+  return _sock_flush (s_sock);
 }
 
 ssize_t
 edk_sock_readv (
-  struct spdk_sock *_sock,
+  struct spdk_sock *s_sock,
   struct iovec *iov, 
   int iovcnt
   )
 {
-  struct spdk_edk_sock *psock  = __edk_sock (_sock);
+  struct spdk_edk_sock *sock  = __edk_sock (s_sock);
 
   EFI_STATUS          Status;
   UINTN               i;
+  TCP_IO              *TcpIo;
   EFI_TCP4_PROTOCOL   *Tcp4;
+  EFI_TCP6_PROTOCOL   *Tcp6;
   UINTN               TotalRequested = 0;
   UINTN               Available;
   NET_BUF             *Pdu;
@@ -544,6 +569,8 @@ edk_sock_readv (
   UINT8               *Payload;
   UINT8               *PayloadPtr;
 
+  TcpIo = &sock->TcpIo;
+
   // Get full count
   for (i = 0; i < iovcnt; i++) {
     TotalRequested += iov[i].iov_len;
@@ -551,16 +578,30 @@ edk_sock_readv (
 
   // SPDK_NOTICELOG ("Bytes to Read: %d\n", TotalRequested);
 
-  Tcp4 = psock->TcpIo.Tcp.Tcp4;
+  if (TcpIo->TcpVersion == TCP_VERSION_4) {
+    Tcp4 = TcpIo->Tcp.Tcp4;
+    if (Tcp4 == NULL) {
+      return EFI_DEVICE_ERROR;
+    }
+  } else {
+    Tcp6 = TcpIo->Tcp.Tcp6;
+    if (Tcp6 == NULL) {
+      return EFI_DEVICE_ERROR;
+    }
+  }
 
   // Test if there is Rx pending
-  if (!psock->RxPending) {
+  if (!sock->RxPending) {
     // SPDK_NOTICELOG ("Rx not pending. Calling Tcp->Poll()\n");
 
     // No Rx pending. Poll once and re-check.
-    Tcp4->Poll (Tcp4);
+    if (TcpIo->TcpVersion == TCP_VERSION_4) {
+      Tcp4->Poll (Tcp4);
+    } else {
+      Tcp6->Poll (Tcp6);
+    }
 
-    if (!psock->RxPending) {
+    if (!sock->RxPending) {
       // Still no packets. Exit with nothing.
       // SPDK_NOTICELOG ("Still no packets. Return EAGAIN.\n");
       errno = EAGAIN;
@@ -570,8 +611,14 @@ edk_sock_readv (
 
   // Test if Rx token was successful.
   // If not, put Rx token back.
-  if (EFI_ERROR (psock->RxToken.CompletionToken.Status)) {
-    Status = edk_sock_setup_rx_token (psock);
+  if (TcpIo->TcpVersion == TCP_VERSION_4) {
+    Status = sock->RxToken.Tcp4Token.CompletionToken.Status;
+  } else {
+    Status = sock->RxToken.Tcp6Token.CompletionToken.Status;
+  }
+
+  if (EFI_ERROR (Status)) {
+    Status = edk_sock_setup_rx_token (sock);
     if (EFI_ERROR (Status)) {
       errno = EFAULT;
     } else {
@@ -581,12 +628,12 @@ edk_sock_readv (
   }
 
   // There is Rx data pending. How much?
-  Available = psock->RxData.DataLength - psock->RxHead;
+  Available = sock->RxData.DataLength - sock->RxHead;
 
   // SPDK_NOTICELOG ("Bytes available: %d\n", Available);
 
-  Pdu         = psock->Pdu;
-  Payload     = NetbufGetByte (Pdu, psock->RxHead, NULL);
+  Pdu         = sock->Pdu;
+  Payload     = NetbufGetByte (Pdu, sock->RxHead, NULL);
   PayloadPtr  = Payload;
   TotalToCopy = MIN (Available, TotalRequested);
   LeftToCopy  = TotalToCopy;
@@ -600,7 +647,7 @@ edk_sock_readv (
 
     CopyMem (iov[i].iov_base, PayloadPtr, ToCopy);
 
-    psock->RxHead += ToCopy;
+    sock->RxHead += ToCopy;
     LeftToCopy -= ToCopy;
   }
 
@@ -610,7 +657,7 @@ edk_sock_readv (
   // Whole Rx packet was processed. Move Rx token back to TCP driver.
   if (Copied == Available) {
     // SPDK_NOTICELOG ("RX packet exhausted\n");
-    Status = edk_sock_setup_rx_token(psock);
+    Status = edk_sock_setup_rx_token(sock);
     if (EFI_ERROR (Status)) {
       errno = EFAULT;
       return -1;
@@ -623,7 +670,7 @@ edk_sock_readv (
 
 static int
 edk_sock_getaddr (
-  struct spdk_sock *_sock, 
+  struct spdk_sock *s_sock,
   char *saddr, 
   int slen, 
   uint16_t *sport,
@@ -641,7 +688,7 @@ enum edk_sock_create_type {
 
 static int
 edk_sock_set_recvbuf (
-  struct spdk_sock *_sock, 
+  struct spdk_sock *s_sock,
   int sz
   )
 {
@@ -650,7 +697,7 @@ edk_sock_set_recvbuf (
 
 static int
 edk_sock_set_sendbuf (
-  struct spdk_sock *_sock, 
+  struct spdk_sock *s_sock,
   int sz
   )
 {
@@ -677,7 +724,7 @@ edk_sock_accept (
 
 static ssize_t
 edk_sock_recv (
-  struct spdk_sock *sock, 
+  struct spdk_sock *s_sock,
   void *buf, 
   size_t len
   )
@@ -688,7 +735,7 @@ edk_sock_recv (
   iov[0].iov_len = len;
 
 
-  return edk_sock_readv (sock, iov, 1);
+  return edk_sock_readv (s_sock, iov, 1);
 }
 
 static bool
@@ -706,10 +753,10 @@ edk_sock_is_ipv6 (
 
 static bool
 edk_sock_is_ipv4 (
-  struct spdk_sock *_sock
+  struct spdk_sock *s_sock
   )
 {
-  struct spdk_edk_sock *sock = __edk_sock (_sock);
+  struct spdk_edk_sock *sock = __edk_sock (s_sock);
 
   assert (sock != NULL);
   assert (sock->Context != NULL);
@@ -719,7 +766,7 @@ edk_sock_is_ipv4 (
 
 static bool
 edk_sock_is_connected (
-  struct spdk_sock *_sock
+  struct spdk_sock *s_sock
   )
 {
   return true;
@@ -735,7 +782,7 @@ edk_sock_group_impl_create (
 
 static int
 edk_sock_set_recvlowat (
-  struct spdk_sock *_sock, 
+  struct spdk_sock *s_sock,
   int nbytes
   )
 {
