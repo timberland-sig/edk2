@@ -1,7 +1,7 @@
 /** @file
   edk_socket.h - Header file for EDK sockets.
 
-Copyright (c) 2021 - 2022, Dell Technologies. All rights reserved.<BR>
+Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 Copyright (c) 2022, Intel Corporation. All rights reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -46,7 +46,7 @@ struct spdk_edk_sock {
   // Receive context
   NET_BUF                           *Pdu;
   UINTN                             MaxPduLen;
-  EFI_TCP4_IO_TOKEN                 RxToken;
+  TCP_IO_IO_TOKEN                   RxToken;
   EFI_TCP4_RECEIVE_DATA             RxData;
   EFI_EVENT                         RxEvent;
   BOOLEAN                           RxPending;
