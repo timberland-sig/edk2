@@ -1,8 +1,22 @@
 name: Build and release EDK2
-on: push
+on: 
+  push:
+    branches:
+      - timberland_1.0_final
+      - timberland_dev
+    paths-ignore:
+      - '.github/**'
+  pull_request:
+    branches:
+      - timberland_1.0_final
+      - timberland_dev
+
 
 jobs:
   build_and_release:
+    permissions:
+      deployments: write
+      contents: write
     runs-on: ubuntu-22.04
     steps:
       - name: checkout sources
@@ -20,7 +34,7 @@ jobs:
               C="$C"~ 
           done
           echo $C
-          TAG=$(git describe --tags --match 'edk2-stable*' --abbrev=7 "$C")
+          TAG=$(git describe --always --tags --match 'edk2-stable*' --abbrev=7 "$C")
           echo TAG=$TAG
           echo "TAG=release-$TAG" >> $GITHUB_ENV
           [ "$TAG" ]
@@ -42,6 +56,13 @@ jobs:
           libtool help2man nasm zip
       - name: build OVMF
         run: bash build.sh
+      - name: checksum artifacts
+        run: >-
+            sha256sum -b 
+            Build/OvmfX64/DEBUG_GCC5/FV/OVMF_CODE.fd
+            Build/OvmfX64/DEBUG_GCC5/FV/OVMF_VARS.fd
+            Build/OvmfX64/DEBUG_GCC5/X64/NvmeOfCli.efi 
+            > checksum.sha256
       - name: create zip file
         run: >-
           zip -r timberland-ovmf.zip -j
@@ -49,6 +70,7 @@ jobs:
           Build/OvmfX64/DEBUG_GCC5/FV/OVMF_VARS.fd
           Build/OvmfX64/DEBUG_GCC5/X64/NvmeOfCli.efi
       - name: create release
+        if: ${{ github.ref == 'refs/heads/timberland_1.0_final' }}
         uses: actions/create-release@v1
         id: create_release
         env:
@@ -61,6 +83,7 @@ jobs:
           body: |
             This is an automated release
       - name: upload artifact
+        if: ${{ github.ref == 'refs/heads/timberland_1.0_final' }}
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: "${{ github.token }}"
@@ -69,3 +92,13 @@ jobs:
           asset_path: timberland-ovmf.zip
           asset_name: timberland-ovmf-${{ env.TAG }}.zip
           asset_content_type: application/zip
+      - name: upload sha256
+        if: ${{ github.ref == 'refs/heads/timberland_1.0_final' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: "${{ github.token }}"
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: checksum.sha256
+          asset_name: timberland-ovmf-${{ env.TAG }}.sha256
+          asset_content_type: text/plain
