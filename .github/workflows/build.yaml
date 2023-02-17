@@ -1,0 +1,116 @@
+name: Build and release EDK2
+on: 
+  push:
+  pull_request:
+    branches:
+      - timberland_1.0_final
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    outputs:
+      tag: ${{ steps.find_tag.outputs.TAG }}
+    steps:
+      - name: checkout sources
+        uses: actions/checkout@v2
+        with:
+          # without fetch-deps 0, git describe fails (https://github.com/actions/checkout/pull/579)
+          fetch-depth: 0
+          submodules: true
+      - name: set release tag from git
+        id: find_tag
+        # For cases where the latest changes are not to real code just the workflow
+        # determine the last "real" commit
+        run: |
+          C=HEAD
+          while ! git show --stat --pretty='' "$C" | head -n -1 | grep -q -E -v 'workflows/build.yaml|install.sh'; do
+              C="$C"~ 
+          done
+          TAG=$(git describe --always --tags --match 'edk2-stable*' --abbrev=7 "$C")
+          echo "TAG=release-$TAG" >> $GITHUB_ENV
+          echo "TAG=release-$TAG" >> $GITHUB_OUTPUT
+          git log -n1 --no-decorate $C >top-commit.txt
+          [ "$TAG" ]
+      - name: create build.sh
+        run: |
+          cat >build.sh <<EOF
+          . ./edksetup.sh
+          make -j -C BaseTools
+          build -t GCC5 -a X64 -p OvmfPkg/OvmfPkgX64.dsc -D NETWORK_IPV6_ENABLE
+          sha256sum -b Build/OvmfX64/DEBUG_GCC5/FV/OVMF_CODE.fd \
+              Build/OvmfX64/DEBUG_GCC5/FV/OVMF_VARS.fd \
+              Build/OvmfX64/DEBUG_GCC5/X64/NvmeOfCli.efi \
+              > checksum.sha256
+          EOF
+      - name: update
+        run: sudo apt-get update
+      - name: install dependencies
+        run: >-
+          sudo apt-get install --yes
+          g++ uuid-dev iasl openssl python3 unzip make
+          libcunit1-dev libaio-dev libssl-dev ncurses-dev
+          libjson-c-dev meson libnuma-dev autoconf automake
+          libtool help2man nasm zip
+      - name: build OVMF
+        run: bash build.sh
+      - name: create zip file
+        run: >-
+          zip -r timberland-ovmf.zip -j
+          Build/OvmfX64/DEBUG_GCC5/FV/OVMF_CODE.fd
+          Build/OvmfX64/DEBUG_GCC5/FV/OVMF_VARS.fd
+          Build/OvmfX64/DEBUG_GCC5/X64/NvmeOfCli.efi
+      - name: store artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          path: |
+            timberland-ovmf.zip
+            checksum.sha256
+            top-commit.txt
+
+  release:
+    if: >
+      ${{ github.ref == 'refs/heads/timberland_1.0_final' &&
+          github.event_name == 'push' }}
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      deployments: write
+      contents: write
+    env:
+      TAG: ${{ needs.build.outputs.tag }}
+    steps:
+      - name: download build artifacts
+        uses: actions/download-artifact@v3
+      - name: create release notes
+        run: |
+          cat >relnotes.txt <<EOF
+          ## Automated release, $(date)
+
+          commit description: ${{ env.TAG }}
+          branch: ${{ github.ref_name }}
+
+          ### SHA256 checksums for binary artifacts:
+          EOF
+          sed 's/^/    /' artifact/checksum.sha256 >> relnotes.txt
+          echo "### Top commit message:" >> relnotes.txt
+          sed 's/^/    /' artifact/top-commit.txt >> relnotes.txt
+      - name: create release
+        uses: actions/create-release@v1
+        id: create_release
+        env:
+          GITHUB_TOKEN: "${{ github.token }}"
+        with:
+          draft: false
+          prerelease: false
+          release_name: "Release ${{ env.TAG }}"
+          tag_name: "${{ env.TAG }}"
+          body_path: relnotes.txt
+      - name: upload release artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: "${{ github.token }}"
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifact/timberland-ovmf.zip
+          asset_name: timberland-ovmf-${{ env.TAG }}.zip
+          asset_content_type: application/zip
