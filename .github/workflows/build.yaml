@@ -68,9 +68,9 @@ jobs:
             top-commit.txt
 
   release:
-    if: >
-      ${{ github.ref == 'refs/heads/timberland_1.0_final' &&
-          github.event_name == 'push' }}
+    if: |
+          github.ref == 'refs/heads/timberland_1.0_final' &&
+          github.event_name == 'push'
     needs: build
     runs-on: ubuntu-22.04
     permissions:
