@@ -21,6 +21,7 @@
 
   !if $(NETWORK_VLAN_ENABLE) == TRUE
     NetworkPkg/VlanConfigDxe/VlanConfigDxe.inf
+    NetworkPkg/Application/VConfig/VConfig.inf
   !endif
 
   NetworkPkg/MnpDxe/MnpDxe.inf
