@@ -40,6 +40,7 @@ jobs:
           sha256sum -b Build/OvmfX64/DEBUG_GCC5/FV/OVMF_CODE.fd \
               Build/OvmfX64/DEBUG_GCC5/FV/OVMF_VARS.fd \
               Build/OvmfX64/DEBUG_GCC5/X64/NvmeOfCli.efi \
+              Build/OvmfX64/DEBUG_GCC5/X64/VConfig.efi \
               > checksum.sha256
           EOF
       - name: update
@@ -59,6 +60,7 @@ jobs:
           Build/OvmfX64/DEBUG_GCC5/FV/OVMF_CODE.fd
           Build/OvmfX64/DEBUG_GCC5/FV/OVMF_VARS.fd
           Build/OvmfX64/DEBUG_GCC5/X64/NvmeOfCli.efi
+          Build/OvmfX64/DEBUG_GCC5/X64/VConfig.efi
       - name: store artifacts
         uses: actions/upload-artifact@v3
         with:
