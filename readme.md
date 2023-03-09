@@ -8,7 +8,6 @@ Further implementation details relative to the UEFI NvmeOfDxe driver can be foun
  
 - IPv6 still has general config and interop issues
 - Hii Currently Missing; currently configuration is accomplished using NetworkPkg/Applications/NvmeOfCli.efi which may use a config file via efi-shell
-- [ ] OVMF/QEMU: Live Network changes can cause hangs in NVMe-oF driver
 - Sporadically, issues in the ExitBootServices code path have been observed
  
 ## Points of Contact
