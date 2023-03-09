@@ -6,14 +6,10 @@ Further implementation details relative to the UEFI NvmeOfDxe driver can be foun
  
 ## Known Open Issues and Errata
  
-- [ ] IPv6 still has general config and interop issues; primarily:
-    - [ ] IPv6 DHCP6 Type 3/4 missing
-    - [ ] IPv6 RA may still be ongoing during connection attempts
-    - [ ] IPv6 SLAAC addresses may not be populated right
-    - [ ] DHCP6_OPT_BOOT_FILE_URL broken/poorly tested, needs better string parsing handling
-- [ ] Hii Currently Missing
+- IPv6 still has general config and interop issues
+- Hii Currently Missing; currently configuration is accomplished using NetworkPkg/Applications/NvmeOfCli.efi which may use a config file via efi-shell
 - [ ] OVMF/QEMU: Live Network changes can cause hangs in NVMe-oF driver
-- [ ] Sightings where EBS handling from EFI_EVENT_GROUP_EXIT_BOOT_SERVICES is touch and go
+- Sporadically, issues in the ExitBootServices code path have been observed
  
 ## Points of Contact
  
