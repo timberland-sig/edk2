@@ -1,8 +1,8 @@
 # UEFI NVMe-oF Boot Implementation
 ## Introduction
-This UEFI Nvme-oF Boot Implementation enables a Boot-from-SAN prototype that produces and consumes [ACPI](https://uefi.org/specifications [uefi.org]) XSDT [NBFT](https://uefi.org/specs/ACPI/6.5/05_ACPI_Software_Programming_Model.html?highlight=nbft#description-header-signatures-for-tables-reserved-by-acpi [uefi.org]) descriptors that are conformant to the [NVM Express Boot Specification 1.0](https://nvmexpress.org/specification/nvme-boot-specification/ [nvmexpress.org]) and it’s interface with the [NVMe-oF messaging type](https://uefi.org/specs/UEFI/2.10/10_Protocols_Device_Path_Protocol.html#nvme-over-fabric-nvme-of-namespace-device-path [uefi.org]) to [UEFI System Specification 2.10](https://uefi.org/specs/UEFI/2.10/ [uefi.org]).
+This UEFI Nvme-oF Boot Implementation enables a Boot-from-SAN prototype that produces and consumes [ACPI](https://uefi.org/specifications) XSDT [NBFT](https://uefi.org/specs/ACPI/6.5/05_ACPI_Software_Programming_Model.html?highlight=nbft#description-header-signatures-for-tables-reserved-by-acpi) descriptors that are conformant to the [NVM Express Boot Specification 1.0](https://nvmexpress.org/specification/nvme-boot-specification/) and it’s interface with the [NVMe-oF messaging type](https://uefi.org/specs/UEFI/2.10/10_Protocols_Device_Path_Protocol.html#nvme-over-fabric-nvme-of-namespace-device-path) to [UEFI System Specification 2.10](https://uefi.org/specs/UEFI/2.10/).
  
-Further implementation details relative to the UEFI NvmeOfDxe driver can be found in the [POC Readme](https://github.com/timberland-sig/edk2/blob/timberland_1.0_final/NetworkPkg/NvmeOfDxe/readme.md [github.com]).
+Further implementation details relative to the UEFI NvmeOfDxe driver can be found in the [POC Readme](https://github.com/timberland-sig/edk2/blob/timberland_1.0_final/NetworkPkg/NvmeOfDxe/readme.md).
  
 ## Known Open Issues and Errata
  
