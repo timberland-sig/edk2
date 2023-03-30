@@ -2,6 +2,7 @@
   Definition for Device Path library.
 
 Copyright (c) 2017, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2021, Dell Technologies. All rights reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -113,6 +114,12 @@ typedef struct {
   UINT16                    TargetPortalGroupTag;
   CHAR8                     TargetName[1];
 } ISCSI_DEVICE_PATH_WITH_NAME;
+
+typedef struct {
+  EFI_DEVICE_PATH_PROTOCOL  Header;
+  UINT8                     Nid[16];
+  CHAR8                     TargetName[1];
+} NVMEOF_DEVICE_PATH_WITH_NAME;
 
 typedef struct {
   EFI_DEVICE_PATH_PROTOCOL  Header;

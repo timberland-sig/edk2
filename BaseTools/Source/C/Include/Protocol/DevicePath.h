@@ -6,6 +6,8 @@
   it can not contain things like PCI bus numbers that change from boot to boot.
 
 Copyright (c) 2017 - 2018, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2021, Dell Technologies. All rights reserved.<BR>
+Copyright (C) 2022, Red Hat, Inc.
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -932,6 +934,19 @@ typedef struct {
 #define ISCSI_LOGIN_OPTION_CHAP_UNI                     0x2000
 
 ///
+/// NVMeOF Device Path SubType
+///
+#define MSG_NVMEOF_DP              0x22
+typedef struct {
+  EFI_DEVICE_PATH_PROTOCOL        Header;
+  ///
+  /// Namespace identifier (NSID).
+  ///
+  UINT8 NamespaceUuid[16];
+  /// CHAR8                        NvmeOf Target Name.
+} NVMEOF_DEVICE_PATH;
+
+///
 /// VLAN Device Path SubType.
 ///
 #define MSG_VLAN_DP               0x14
@@ -1272,6 +1287,7 @@ typedef union {
   ATAPI_DEVICE_PATH                          Atapi;
   SCSI_DEVICE_PATH                           Scsi;
   ISCSI_DEVICE_PATH                          Iscsi;
+  NVMEOF_DEVICE_PATH                         NvmeOf;
   FIBRECHANNEL_DEVICE_PATH                   FibreChannel;
   FIBRECHANNELEX_DEVICE_PATH                 FibreChannelEx;
 
@@ -1330,6 +1346,7 @@ typedef union {
   ATAPI_DEVICE_PATH                          *Atapi;
   SCSI_DEVICE_PATH                           *Scsi;
   ISCSI_DEVICE_PATH                          *Iscsi;
+  NVMEOF_DEVICE_PATH                         *NvmeOf;
   FIBRECHANNEL_DEVICE_PATH                   *FibreChannel;
   FIBRECHANNELEX_DEVICE_PATH                 *FibreChannelEx;
 
