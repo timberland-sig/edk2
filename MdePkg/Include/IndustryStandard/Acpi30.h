@@ -3,6 +3,7 @@
 
   Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
   Copyright (C) 2025, Advanced Micro Devices, Inc. All rights reserved.
+  Copyright (c) 2025, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
 
@@ -741,5 +742,10 @@ typedef struct {
 /// "iBFT" iSCSI Boot Firmware Table
 ///
 #define EFI_ACPI_3_0_ISCSI_BOOT_FIRMWARE_TABLE_SIGNATURE  SIGNATURE_32('i', 'B', 'F', 'T')
+
+///
+/// "nBFT" NVMeOF Boot Firmware Table
+///
+#define EFI_ACPI_3_0_NVMEOF_BFT_SIGNATURE  SIGNATURE_32('N', 'B', 'F', 'T')
 
 #pragma pack()
