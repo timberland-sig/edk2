@@ -3,6 +3,7 @@
   IDE controller.
 
   Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2021, Dell Technologies. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
   @par Revision Reference:
@@ -65,6 +66,14 @@ typedef struct _EFI_DISK_INFO_PROTOCOL EFI_DISK_INFO_PROTOCOL;
 #define EFI_DISK_INFO_NVME_INTERFACE_GUID \
   { \
     0x3ab14680, 0x5d3f, 0x4a4d, {0xbc, 0xdc, 0xcc, 0x38, 0x0, 0x18, 0xc7, 0xf7 } \
+  }
+
+///
+/// Global ID for a NVMeOF interface.  Used to fill in EFI_DISK_INFO_PROTOCOL.Interface
+/// 
+#define EFI_DISK_INFO_NVMEOF_INTERFACE_GUID \
+  { \
+    0xf6b7526a, 0x93c1, 0x4de2, {0x93, 0xc0, 0xfb, 0x6c, 0x73, 0x9c, 0x0b, 0x91 } \
   }
 
 ///
