@@ -1,7 +1,8 @@
 /** @file
   DevicePathFromText protocol as defined in the UEFI 2.0 specification.
 
-Copyright (c) 2013 - 2018, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2013 - 2023, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -2635,6 +2636,45 @@ DevPathFromTextiSCSI (
 }
 
 /**
+  Converts a text device path node to NVMeOF device path structure.
+
+  @param TextDeviceNode  The input Text device path node.
+
+  @return A pointer to the newly-created NVMeOF device path structure.
+**/
+EFI_DEVICE_PATH_PROTOCOL *
+DevPathFromTextNvmeOf (
+  IN CHAR16  *TextDeviceNode
+  )
+{
+  CHAR8                         *AsciiStr;
+  CHAR16                        *NameStr;
+  NVMEOF_DEVICE_PATH_WITH_NAME  *NvmeOfDevPath;
+  CHAR16                        *NidStr;
+  UINT64                        Nid;
+  UINT16                        NodeLength;
+
+  NameStr = GetNextParamStr (&TextDeviceNode);
+  NidStr  = GetNextParamStr (&TextDeviceNode);
+
+  NodeLength = (UINT16)(sizeof (NVMEOF_DEVICE_PATH_WITH_NAME) + StrLen (NameStr));
+
+  NvmeOfDevPath = (NVMEOF_DEVICE_PATH_WITH_NAME *)CreateDeviceNode (
+                                                    MESSAGING_DEVICE_PATH,
+                                                    MSG_NVMEOF_DP,
+                                                    NodeLength
+                                                    );
+
+  AsciiStr = NvmeOfDevPath->TargetName;
+  StrToAscii (NameStr, &AsciiStr);
+
+  Strtoi64 (NidStr, &Nid);
+  WriteUnaligned64 ((UINT64 *)&NvmeOfDevPath->Nid, SwapBytes64 (Nid));
+
+  return (EFI_DEVICE_PATH_PROTOCOL *)NvmeOfDevPath;
+}
+
+/**
   Converts a text device path node to VLAN device path structure.
 
   @param TextDeviceNode  The input Text device path node.
@@ -3539,6 +3579,7 @@ GLOBAL_REMOVE_IF_UNREFERENCED DEVICE_PATH_FROM_TEXT_TABLE  mUefiDevicePathLibDev
   { L"UsbWwid",                 DevPathFromTextUsbWwid                 },
   { L"Unit",                    DevPathFromTextUnit                    },
   { L"iSCSI",                   DevPathFromTextiSCSI                   },
+  { L"NVMeOF",                  DevPathFromTextNvmeOf                  },
   { L"Vlan",                    DevPathFromTextVlan                    },
   { L"Dns",                     DevPathFromTextDns                     },
   { L"Uri",                     DevPathFromTextUri                     },
