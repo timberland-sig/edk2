@@ -2,6 +2,7 @@
   ACPI 3.0 definitions from the ACPI Specification Revision 3.0b October 10, 2006
 
   Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2022 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
 
@@ -717,6 +718,11 @@ typedef struct {
 /// "iBFT" iSCSI Boot Firmware Table
 ///
 #define EFI_ACPI_3_0_ISCSI_BOOT_FIRMWARE_TABLE_SIGNATURE  SIGNATURE_32('i', 'B', 'F', 'T')
+
+///
+/// "nBFT" NVMeOF Boot Firmware Table
+///
+#define EFI_ACPI_3_0_NVMEOF_BFT_SIGNATURE  SIGNATURE_32('N', 'B', 'F', 'T')
 
 #pragma pack()
 
