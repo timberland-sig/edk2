@@ -1,94 +1,46 @@
 /** @file
-  Passthrough Header file for NvmeOf driver.
-  
-  Contains definations for Passthru whose 
-  role is for invoking NVMeOF CLI and BM functionality
+  Header for NVMe-oF Passthrough protocol.
 
-  Copyright (c) 2020, Dell EMC All rights reserved
+  It is meant to be implemented by EDKII NVMe-oF drivers
+  to allow for external control over the driver (e.g. from CLI utilities).
+  It also shall allow boot manager libraries to obtain an NVMe-oF-specific
+  boot description of a given, supported handle.
+
+  Copyright (c) 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
 
-#ifndef _UEFI_NVMEOF_PASSTHRU_H_
-#define _UEFI_NVMEOF_PASSTHRU_H_
+#ifndef _EDKII_NVMEOF_PASSTHRU_H_
+#define _EDKII_NVMEOF_PASSTHRU_H_
 
-#define NVMEOF_CLI_MAX_SIZE       224
-#define BLOCK_SIZE                512
-#define ADDR_SIZE                 40
-#define KEY_SIZE                  20
+typedef struct _EDKII_NVMEOF_PASSTHRU_PROTOCOL EDKII_NVMEOF_PASSTHRU_PROTOCOL;
 
-typedef struct _NVMEOF_CONNECT_COMMAND {
-  CHAR8                    Transport[NVMEOF_CLI_MAX_SIZE]; //Transport type
-  CHAR8                    Nqn[NVMEOF_CLI_MAX_SIZE];//NVMe Qualified Name
-  CHAR8                    Traddr[NVMEOF_CLI_MAX_SIZE];//Transport address
-  UINT16                   Trsvcid;//Transport service id
-  UINTN                    Hostid;//Host identity
-  CHAR8                    Mac[NVMEOF_CLI_MAX_SIZE];
-  UINT8                    IpMode;
-  CHAR8                    LocalIp[NVMEOF_CLI_MAX_SIZE];
-  CHAR8                    SubnetMask[NVMEOF_CLI_MAX_SIZE];
-  CHAR8                    Gateway[NVMEOF_CLI_MAX_SIZE];
-  UINT16                   ConnectTimeout;
-  CHAR8                    Hostnqn[NVMEOF_CLI_MAX_SIZE];//User-defined hostnqn
-  CHAR8                    UseHostNqn; // Indicate whether to use hostnqn
-} NVMEOF_CONNECT_COMMAND;
+/**
+  Obtain NVMe-oF-specific boot description for a given supported handle.
 
-typedef struct _NVMEOF_CLI_CTRL_MAPPING {
-  struct spdk_nvme_ctrlr   *Ctrlr;
-  struct spdk_nvme_qpair   *Ioqpair;
-  CHAR8                    Key[KEY_SIZE];
-  UINTN                    Nsid;
-  UINT16                   Cntliduser;
-  CHAR8                    Traddr[ADDR_SIZE];
-  CHAR8                    Trsvcid[ADDR_SIZE];
-  CHAR8                    Subnqn[NVMEOF_CLI_MAX_SIZE];
-  LIST_ENTRY               CliCtrlrList;
-} NVMEOF_CLI_CTRL_MAPPING;
+  Caller is responsible for freeing the memory for the description allocated
+  by this function.
 
-typedef struct _NVMEOF_READ_WRITE_DATA {
-  UINT64                   Startblock;
-  UINT32                   Blockcount;
-  UINT64                   Datasize;
-  CHAR16                   *Data;
-  struct spdk_nvme_ctrlr   *Ctrlr;
-  struct spdk_nvme_qpair   *Ioqpair;
-  UINTN                    Nsid;
-  UINTN                    FileSize;
-  VOID                     *Payload;
-} NVMEOF_READ_WRITE_DATA;
+  @param[in]  This                Pointer to EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+  @param[in]  Handle              Handle for which to obtain boot description.
+  @param[out] Description         Resultant boot description.
 
-typedef struct _NVMEOF_CLI_IDENTIFY {
-  struct spdk_nvme_ctrlr             *Ctrlr;
-  const struct spdk_nvme_ctrlr_data  *Cdata;
-  UINTN                              NsId;
-} NVMEOF_CLI_IDENTIFY;
+  @retval EFI_SUCCESS             Boot description was successfully created.
+  @retval EFI_UNSUPPORTED         Handle is not related to an NVMe-oF namespace.
+**/
+typedef
+EFI_STATUS
+(EFIAPI *EDKII_NVMEOF_PASSTHRU_GET_BOOT_DESC)(
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL   *This,
+  IN  EFI_HANDLE                       Handle,
+  OUT CHAR16                           **Description
+  );
 
-typedef struct _NVMEOF_CLI_DISCONNECT {
-  struct spdk_nvme_ctrlr   *Ctrlr;
-  CHAR8                    Devicekey[KEY_SIZE];
-} NVMEOF_CLI_DISCONNECT;
+typedef struct _EDKII_NVMEOF_PASSTHRU_PROTOCOL {
+  EDKII_NVMEOF_PASSTHROUGH_GET_BOOT_DESC    GetBootDesc;
+} EDKII_NVMEOF_PASSTHRU_PROTOCOL;
 
-typedef struct _NVMEOF_READ_WRITE_DATA_IN_BLOCK {
-  CHAR16 Device_id[5];
-  UINT64 Start_lba;
-  UINT32 Numberof_block;
-  UINT64 Pattern;
-} NVMEOF_READ_WRITE_DATA_IN_BLOCK;
+extern EFI_GUID gEdkiiNvmeofPassThruProtocolGuid;
 
-typedef struct _NVMEOF_PASSTHROUGH_PROTOCOL {
-  EFI_STATUS(EFIAPI *Connect)(NVMEOF_CONNECT_COMMAND);
-  EFI_STATUS(EFIAPI *NvmeOfCliRead)(NVMEOF_READ_WRITE_DATA);
-  EFI_STATUS(EFIAPI *NvmeOfCliWrite)(NVMEOF_READ_WRITE_DATA);
-  NVMEOF_CLI_IDENTIFY(EFIAPI *NvmeOfCliIdentify)(NVMEOF_CLI_IDENTIFY);
-  VOID(EFIAPI *NvmeOfCliDisconnect)(NVMEOF_CLI_DISCONNECT, CHAR16 **);
-  UINT8(EFIAPI *NvmeOfCliReset)(struct spdk_nvme_ctrlr *, CHAR16 **);
-  VOID(EFIAPI *NvmeOfCliList)();
-  VOID(EFIAPI *NvmeOfCliListConnect)();
-  UINTN(EFIAPI *NvmeOfCliVersion)();
-  NVMEOF_CLI_CTRL_MAPPING **CliCtrlMap;
-  EFI_STATUS(EFIAPI *GetBootDesc)(EFI_HANDLE, CHAR16 *);
-} NVMEOF_PASSTHROUGH_PROTOCOL;
-
-extern EFI_GUID gNvmeofPassThroughProtocolGuid;
-
-#endif
+#endif /* _EDKII_NVMEOF_PASSTHRU_H_ */
