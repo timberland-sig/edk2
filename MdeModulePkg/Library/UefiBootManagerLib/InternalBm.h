@@ -4,6 +4,7 @@
 Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
 Copyright (c) 2004 - 2018, Intel Corporation. All rights reserved.<BR>
 (C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>
+Copyright (c) 2022 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -35,6 +36,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <Protocol/UsbIo.h>
 #include <Protocol/DiskInfo.h>
 #include <Protocol/NvmExpressPassthru.h>
+#include <Protocol/NvmeOfPassthru.h>
 #include <Protocol/IdeControllerInit.h>
 #include <Protocol/BootLogo.h>
 #include <Protocol/DriverHealth.h>
@@ -89,6 +91,7 @@ typedef enum {
   BmMessageSataBoot,
   BmMessageUsbBoot,
   BmMessageScsiBoot,
+  BmMessageNvmeofBoot,
   BmMiscBoot
 } BM_BOOT_TYPE;
 
