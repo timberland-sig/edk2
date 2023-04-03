@@ -1,7 +1,7 @@
 /** @file
   Declaration of external functions shared in TCP driver.
 
-  Copyright (c) 2009 - 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2009 - 2023, Intel Corporation. All rights reserved.<BR>
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -613,6 +613,29 @@ TcpRxCallback (
   IN EFI_NET_SESSION_DATA  *NetSession,
   IN NET_BUF               *Pkt,
   IN VOID                  *Context    OPTIONAL
+  );
+
+/**
+  Packet transmit callback function provided to IP_IO.
+  Used to react to transmit problems happening at lower layers
+  (e.g. cable detach or device errors coming from SNP).
+
+  This function will not be called by IP_IO unless TCP_CB pointer
+  is supplied in IpIoSend() NotifyData parameter.
+
+  @param[in] Status         Result of a transmit issued through IP_IO.
+  @param[in] Context        Ignored. NULL.
+  @param[in] Sender         Pointer to IP protocol used to transmit a packet.
+  @param[in] NotifyData     Pointer to TCP Control Block associated with
+                            the Tx request.
+**/
+VOID
+EFIAPI
+TcpTxCallback (
+  IN EFI_STATUS         Status,
+  IN VOID               *Context,
+  IN IP_IO_IP_PROTOCOL  Sender,
+  IN VOID               *NotifyData
   );
 
 /**
