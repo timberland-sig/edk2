@@ -368,8 +368,10 @@ TcpCreateService (
     OpenData.IpConfigData.Ip6CfgData.DefaultProtocol = EFI_IP_PROTO_TCP;
   }
 
+  OpenData.PktSentNotify = TcpTxCallback;
   OpenData.PktRcvdNotify = TcpRxCallback;
   Status                 = IpIoOpen (TcpServiceData->IpIo, &OpenData);
+
   if (EFI_ERROR (Status)) {
     goto ON_ERROR;
   }
