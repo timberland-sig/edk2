@@ -1,8 +1,9 @@
 /** @file
   Library functions which relate with boot option description.
 
-Copyright (c) 2011 - 2018, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2011 - 2023, Intel Corporation. All rights reserved.<BR>
 (C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>
+Copyright (c) 2022, Dell Technologies. All rights reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -97,6 +98,10 @@ BmDevicePathType (
 
           case MSG_SCSI_DP:
             return BmMessageScsiBoot;
+            break;
+	
+          case MSG_NVMEOF_DP:
+            return BmMessageNvmeofBoot;
             break;
         }
     }
@@ -675,6 +680,99 @@ BmGetNvmeDescription (
 }
 
 /**
+  Return the boot description for NVMe-over-Fabrics boot device.
+
+  @param Handle                Controller handle.
+
+  @return  The description string.
+**/
+CHAR16 *
+BmGetNvmeofDescription (
+  IN EFI_HANDLE  Handle
+  )
+{
+  EFI_STATUS                      Status;
+  EFI_DEVICE_PATH_PROTOCOL        *DevicePath;
+  CHAR16                          *Description;
+  UINTN                           DescriptionLen;
+  CHAR16                          *DiskDesc;
+  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *Bm;
+  EFI_DEVICE_PATH_PROTOCOL        *Node;
+  BOOLEAN                         Found;
+
+  DiskDesc  = NULL;
+  Found     = FALSE;
+
+  DevicePath = DevicePathFromHandle (Handle);
+  if (DevicePath == NULL) {
+    return NULL;
+  }
+
+  for (Node = DevicePath; !IsDevicePathEndType(Node); Node = NextDevicePathNode(Node)) {
+    if ((DevicePathType(Node) == MESSAGING_DEVICE_PATH) &&
+      (DevicePathSubType(Node) == MSG_NVMEOF_DP)) {
+      //
+      // Do not return description when the Handle is not a child of NVMe-oF controller.
+      //
+      Found = TRUE;
+      break;
+    }
+  }
+
+  if (!Found) {
+    return NULL;
+  }
+
+  Status = gBS->LocateProtocol (
+                  &gEdkiiNvmeofPassThruProtocolGuid,
+                  NULL,
+                  (VOID **)&Bm
+                  ); 
+  if (EFI_ERROR (Status)) {
+    return NULL;
+  }
+
+  Status = Bm->GetBootDesc (Bm, Handle, &DiskDesc);
+  if (EFI_ERROR (Status)) {
+    return NULL;
+  }
+
+  // At minimum, fit in "NVMeoF Device"
+  DescriptionLen = sizeof (L"NVMeOF Device");
+  if (DiskDesc != NULL) {
+    // When boot description is available, fit it in.
+    // Initial DescriptionLen value already accounts for trailing zero.
+    DescriptionLen += sizeof(L" - ") - sizeof(CHAR16);
+    DescriptionLen += StrLen (DiskDesc);
+  }
+
+  Description = AllocateZeroPool (DescriptionLen);
+
+  if (Description != NULL) {
+    if (DiskDesc != NULL) {
+      UnicodeSPrint (
+        Description,
+        DescriptionLen,
+        L"NVMeOF Device - %s",
+        DiskDesc
+        );
+
+      FreePool (DiskDesc);
+    } else {
+      UnicodeSPrint (
+        Description,
+        DescriptionLen,
+        L"NVMeOF Device"
+        );
+    }
+
+    BmEliminateExtraSpaces (Description);
+  }
+
+  return Description;
+}
+
+/**
   Return the boot description for the controller based on the type.
 
   @param Handle                Controller handle.
@@ -784,6 +882,7 @@ BM_GET_BOOT_DESCRIPTION  mBmBootDescriptionHandlers[] = {
   BmGetNetworkDescription,
   BmGetLoadFileDescription,
   BmGetNvmeDescription,
+  BmGetNvmeofDescription,
   BmGetMiscDescription
 };
 
