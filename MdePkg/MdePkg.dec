@@ -9,6 +9,7 @@
 # (C) Copyright 2016 - 2021 Hewlett Packard Enterprise Development LP<BR>
 # Copyright (c) 2022, Loongson Technology Corporation Limited. All rights reserved.<BR>
 # Copyright (c) 2021 - 2022, Arm Limited. All rights reserved.<BR>
+# Copyright (c) 2022, Dell Technologies. All rights reserved.<BR>
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -1030,6 +1031,9 @@
 [Protocols]
   ## Include/Protocol/MemoryAccept.h
   gEdkiiMemoryAcceptProtocolGuid = { 0x38c74800, 0x5590, 0x4db4, { 0xa0, 0xf3, 0x67, 0x5d, 0x9b, 0x8e, 0x80, 0x26 }}
+
+  ## Include/Protocol/NvmeOfPassthru.h
+  gEdkiiNvmeofPassThruProtocolGuid = { 0x11d75cae, 0x70ab, 0x4b9f, { 0xbc, 0x80, 0x75, 0xf5, 0x02, 0x30, 0x86, 0x4a }}
 
   ## Include/Protocol/Pcd.h
   gPcdProtocolGuid               = { 0x11B34006, 0xD85B, 0x4D0A, { 0xA2, 0x90, 0xD5, 0xA5, 0x71, 0x31, 0x0E, 0xF7 }}
