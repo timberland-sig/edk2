@@ -21,6 +21,7 @@
   SKUID_IDENTIFIER               = DEFAULT
 
   DEFINE NETWORK_ISCSI_ENABLE    = TRUE
+  DEFINE NETWORK_NVMEOF_ENABLE   = TRUE
 
 !include MdePkg/MdeLibs.dsc.inc
 
