@@ -20,6 +20,7 @@
 #   DEFINE NETWORK_ALLOW_HTTP_CONNECTIONS = FALSE
 #   DEFINE NETWORK_ISCSI_ENABLE           = FALSE
 #   DEFINE NETWORK_ISCSI_MD5_ENABLE       = TRUE
+#   DEFINE NETWORK_NVMEOF_ENABLE          = FALSE
 #   DEFINE NETWORK_VLAN_ENABLE            = TRUE
 #   DEFINE NETWORK_PXE_BOOT_ENABLE        = TRUE
 #
@@ -143,6 +144,13 @@
   # This flag is to enable or disable PXE boot feature.
   #
   DEFINE NETWORK_PXE_BOOT_ENABLE = TRUE
+!endif
+
+!ifndef NETWORK_NVMEOF_ENABLE
+  #
+  # This flag is to enable or disable NVMeOF TCP feature.
+  #
+  DEFINE NETWORK_NVMEOF_ENABLE = TRUE
 !endif
 
 !if $(NETWORK_ENABLE) == TRUE
