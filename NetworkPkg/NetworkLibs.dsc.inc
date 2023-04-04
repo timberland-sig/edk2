@@ -7,6 +7,7 @@
 #
 # Copyright (c) 2019, Intel Corporation. All rights reserved.<BR>
 # (C) Copyright 2020 Hewlett Packard Enterprise Development LP<BR>
+# Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 #
 #    SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -21,3 +22,4 @@
   # HTTP applications.
   HttpLib|NetworkPkg/Library/DxeHttpLib/DxeHttpLib.inf
   HttpIoLib|NetworkPkg/Library/DxeHttpIoLib/DxeHttpIoLib.inf
+  DxeSpdkLib|NetworkPkg/Library/DxeSpdkLib/DxeSpdkLib.inf
