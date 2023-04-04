@@ -1,0 +1,11 @@
+// /** @file
+// Module UNI description file
+// Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+// **/
+
+
+#string STR_MODULE_ABSTRACT             #language en-US "SPDK library"
+
+#string STR_MODULE_DESCRIPTION          #language en-US "This module provides SPDK NVMeOF TCP implementation for EDK"
+
