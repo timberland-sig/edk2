@@ -5,6 +5,7 @@
 # Copyright (c) 2009 - 2021, Intel Corporation. All rights reserved.<BR>
 # Copyright (c) 2020, Hewlett Packard Enterprise Development LP. All rights reserved.<BR>
 # Copyright (c) 2022, Loongson Technology Corporation Limited. All rights reserved.<BR>
+# Copyright (c) 2021, Dell Technologies. All rights reserved.<BR>
 #    SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 ##
@@ -127,6 +128,7 @@
   NetworkPkg/Library/DxeNetLib/DxeNetLib.inf
   NetworkPkg/Library/DxeTcpIoLib/DxeTcpIoLib.inf
   NetworkPkg/Library/DxeUdpIoLib/DxeUdpIoLib.inf
+  NetworkPkg/Library/DxeSpdkLib/DxeSpdkLib.inf
 
   !include NetworkPkg/Network.dsc.inc
 

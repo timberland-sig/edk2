@@ -5,6 +5,7 @@
 #
 # Copyright (c) 2009 - 2021, Intel Corporation. All rights reserved.<BR>
 # (C) Copyright 2015-2020 Hewlett Packard Enterprise Development LP<BR>
+# Copyright (c) 2021 - 2022, Dell Technologies. All rights reserved.<BR>
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -19,6 +20,11 @@
 
 [Includes]
   Include
+  Library/DxeSpdkLib/SpdkShim/
+  Library/DxeSpdkLib/SpdkShim/sys/
+  Library/DxeSpdkLib/SpdkShim/spdk/
+  Library/DxeSpdkLib/spdk/include/
+  Library/DxeSpdkLib/spdk/lib/nvme/
 
 [LibraryClasses]
   ##  @libraryclass  IpIo layer upon EFI IP4 Protocol.
