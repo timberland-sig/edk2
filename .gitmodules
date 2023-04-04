@@ -38,3 +38,7 @@
 [submodule "TcgTpmPkg/Library/TpmLib/TPM"]
 	path = TcgTpmPkg/Library/TpmLib/TPM
 	url = https://github.com/TrustedComputingGroup/TPM
+[submodule "NetworkPkg/Library/DxeSpdkLib/spdk"]
+	path = NetworkPkg/Library/DxeSpdkLib/spdk
+        url = https://github.com/spdk/spdk.git
+        branch = v23.01.x 
