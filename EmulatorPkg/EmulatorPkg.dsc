@@ -7,6 +7,7 @@
 # Copyright (c) 2006 - 2021, Intel Corporation. All rights reserved.<BR>
 # Portions copyright (c) 2010 - 2011, Apple Inc. All rights reserved.<BR>
 # Copyright (c) Microsoft Corporation.
+# Copyright (c) 2021, Dell Technologies. All rights reserved.<BR>
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -34,6 +35,7 @@
   DEFINE NETWORK_HTTP_BOOT_ENABLE = FALSE
   DEFINE NETWORK_HTTP_ENABLE      = FALSE
   DEFINE NETWORK_ISCSI_ENABLE     = FALSE
+  DEFINE NETWORK_NVMEOF_ENABLE    = FALSE
   DEFINE SECURE_BOOT_ENABLE       = FALSE
 
   #
