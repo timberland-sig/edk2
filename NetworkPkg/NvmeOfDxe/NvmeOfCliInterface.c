@@ -37,6 +37,17 @@ extern UINT8 gNvmeOfNbftListIndex;
 extern const struct spdk_nvme_transport_ops tcp_ops;
 extern struct spdk_net_impl g_edksock_net_impl;
 
+/**
+  This function is used to get the Target Device Description required for Boot Manager.
+
+  @param[in]     This         Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+  @param[in]     Handle       Device Handle.
+  @param[out]    Description  Device Description.
+
+  @retval EFI_SUCCESS            Device Description is available.
+  @retval EFI_NOT_FOUND          Description Not Found.
+
+**/
 EFI_STATUS
 EFIAPI
 NvmeOfCliGetBootDesc (
@@ -277,15 +288,15 @@ NvmeOfCliIsBlockCtrlr (CHAR16  **Key)
 }
 
 /**
-  Reset the Device.
+  This function is used to reset the target controller.
 
-  @param  Ctrlr                Controller information
+  @param[in]    This    Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+  @param[in]    Ctrlr   Pointer to Abstract the SPDK structure (struct spdk_nvme_ctrlr).
 
-  @retval EFI_SUCCESS          The device was reset.
-  @retval EFI_DEVICE_ERROR     The device is not functioning properly and could
-                               not be reset.
+  @retval EFI_SUCCESS         Device reset completed.
+  @retval EFI_DEVICE_ERROR    The device is not functioning properly and could not reset.
+
 **/
-
 UINT8
 EFIAPI
 NvmeOfCliReset (
@@ -329,10 +340,13 @@ NvmeOfCliReset (
 }
 
 /**
- NVMEOF Driver version
- @retval Driver version
-**/
+  This function is used to get the NVMe-oF Driver Version.
 
+  @param[in]    This    Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+
+  @return    NVMe-oF Driver Version.
+
+**/
 UINTN
 EFIAPI
 NvmeOfCliVersion (
@@ -390,9 +404,13 @@ GetSerialModelStr (
 
 
 /**
-  Nvmeof Cli List.
+  This function is used to list the namespaces of the target controller connected through
+  EDKII_NVMEOF_PASSTHRU_PROTOCOL Connect member function.
+
+  @param[in]    This    Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
 
   @retval None
+
 **/
 VOID
 EFIAPI
@@ -444,11 +462,14 @@ NvmeOfCliList (
 }
 
 /**
-  Nvmeof Cli List Connect.
+  This function is used to list the namespaces of the target controller connected through
+  NVMe-oF Driver.
+
+  @param[in]    This    Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
 
   @retval None
-**/
 
+**/
 VOID
 EFIAPI
 NvmeOfCliListConnect (
@@ -954,6 +975,14 @@ NvmeOfCliIdentify (
   return ReturnData;
 }
 
+/**
+  This function is used to get the information of target controllers.
+
+  @param[in]    This    Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+
+  @return    Address of Pointer to NVMEOF_CLI_CTRL_MAPPING structure.
+
+**/
 NVMEOF_CLI_CTRL_MAPPING**
 EFIAPI
 NvmeOfCliGetCtrlMap (
