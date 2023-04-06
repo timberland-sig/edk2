@@ -38,10 +38,11 @@ extern const struct spdk_nvme_transport_ops tcp_ops;
 extern struct spdk_net_impl g_edksock_net_impl;
 
 EFI_STATUS
-EFIAPI 
-NvmeOfGetBootDesc (
-  EFI_HANDLE Handle,
-  CHAR16     *Description
+EFIAPI
+NvmeOfCliGetBootDesc (
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL   *This,
+  IN  EFI_HANDLE                       Handle,
+  OUT CHAR16                           *Description
 )
 {
   UINTN Index;
@@ -110,7 +111,7 @@ NvmeOfCliCleanup ()
   NET_LIST_FOR_EACH_SAFE (Entry, NextEntryProcessed, &gCliCtrlMap->CliCtrlrList) {
     MappingList = NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
     if (PrevCntliduser != MappingList->Cntliduser) {
-      spdk_nvme_detach (MappingList->Ctrlr);
+      spdk_nvme_detach ((struct spdk_nvme_ctrlr *) MappingList->Ctrlr);
       PrevCntliduser = MappingList->Cntliduser;
     }
     RemoveEntryList (&MappingList->CliCtrlrList);
@@ -119,23 +120,28 @@ NvmeOfCliCleanup ()
 }
 
 /**
-  Cli Connect function
+  This function is used to establish connection to the NVMe-oF Target device.
 
-  @param  ConnectData
+  @param[in]    This              Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+  @param[in]    ConnectData       Pointer to the NVMEOF_CONNECT_COMMAND structure containing
+                                  information required to connect NVMe-oF Target.
 
   @retval EFI_SUCCESS            Connected successfully.
-  @retval EFI_OUT_OF_RESOURCES   Out of Resources
-  @retval EFI_NOT_FOUND          Resource Not Found
+  @retval EFI_OUT_OF_RESOURCES   Out of Resources.
+  @retval EFI_NOT_FOUND          Resource Not Found.
+  @retval EFI_INVALID_PARAMETER  Invalid Parameter.
+
 **/
 EFI_STATUS
 EFIAPI
 NvmeOfCliConnect (
-  NVMEOF_CONNECT_COMMAND ConnectData
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This,
+  IN  NVMEOF_CONNECT_COMMAND          *ConnectData
   )
 {
   EFI_STATUS Status = EFI_SUCCESS;
 
-  Status = InstallControllerHandler (&ConnectData);
+  Status = InstallControllerHandler (ConnectData);
   if (EFI_ERROR (Status)) {
     Print(L"\nError connecting get controller\n");
   } 
@@ -168,39 +174,53 @@ NvmeOfCliIoComplete (
 }
 
 /**
-  Read data from the cli cmd.
+  This function is used to read one block of data from the NVMe-oF target device.
 
-  @param  ReadData               The read data for cli cmd.
+  @param[in]    This      Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+  @param[in]    ReadData  Pointer to the NVMEOF_READ_WRITE_DATA structure.
 
   @retval EFI_SUCCESS            Data successfully read from the device.
   @retval EFI_INVALID_PARAMETER  invalid parameter.
+  @retval EFI_DEVICE_ERROR       Error reading from device.
+
 **/
 EFI_STATUS
 EFIAPI
-NvmeOfCliRead (NVMEOF_READ_WRITE_DATA ReadData)
+NvmeOfCliRead (
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This,
+  IN  NVMEOF_READ_WRITE_DATA          *ReadData
+  )
 {
   EFI_STATUS Status = EFI_SUCCESS;
   UINT8      Is_Completed = 0;
   int        rc = 0;
 
   /*ctrl and NsId getting from global structure of type  (struct spdk_nvme_dev)*/
-  struct spdk_nvme_ns *ns = spdk_nvme_ctrlr_get_ns (ReadData.Ctrlr, ReadData.Nsid);
+  struct spdk_nvme_ns *ns = spdk_nvme_ctrlr_get_ns (
+                              (struct spdk_nvme_ctrlr *) ReadData->Ctrlr,
+                              ReadData->Nsid
+                              );
 
-  Status = spdk_nvme_ns_cmd_read (ns,
-             ReadData.Ioqpair, 
-             ReadData.Payload,
-             ReadData.Startblock,
-             1, 
-             NvmeOfCliIoComplete, 
-             &Is_Completed, 
-             0);
+  Status = spdk_nvme_ns_cmd_read (
+             ns,
+             (struct spdk_nvme_qpair *) ReadData->Ioqpair,
+             ReadData->Payload,
+             ReadData->Startblock,
+             1,
+             NvmeOfCliIoComplete,
+             &Is_Completed,
+             0
+             );
   if (Status != 0) {
     DEBUG ((DEBUG_ERROR, "NvmeOfCliRead: Error in spdk read\n"));
     Status = EFI_INVALID_PARAMETER;
-    return Status;    
+    return Status;
   }
   while (!Is_Completed) {
-    rc = spdk_nvme_qpair_process_completions (ReadData.Ioqpair, 0);
+    rc = spdk_nvme_qpair_process_completions (
+           (struct spdk_nvme_qpair *) ReadData->Ioqpair,
+           0
+           );
     if (rc < 0) {
         Status = EFI_DEVICE_ERROR;
         break;
@@ -268,7 +288,11 @@ NvmeOfCliIsBlockCtrlr (CHAR16  **Key)
 
 UINT8
 EFIAPI
-NvmeOfCliReset (struct spdk_nvme_ctrlr *Ctrlr, CHAR16 **Key)
+NvmeOfCliReset (
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This,
+  IN  VOID                            *Ctrlr,
+  IN  CHAR16                          **Key
+  )
 {
   UINT8                          Status = 0;
   LIST_ENTRY                     *Entry = NULL;
@@ -278,13 +302,13 @@ NvmeOfCliReset (struct spdk_nvme_ctrlr *Ctrlr, CHAR16 **Key)
 
   Flag = NvmeOfCliIsBlockCtrlr (Key);
   if (Flag) {
-    Status = spdk_nvme_ctrlr_reset (Ctrlr);
+    Status = spdk_nvme_ctrlr_reset ((struct spdk_nvme_ctrlr *) Ctrlr);
     if (Status != 0) {
       Print (L"Reset Error\n");
       return Status;
     }
 
-    Io_qpair = spdk_nvme_ctrlr_alloc_io_qpair (Ctrlr, NULL, 0);
+    Io_qpair = spdk_nvme_ctrlr_alloc_io_qpair ((struct spdk_nvme_ctrlr *)Ctrlr, NULL, 0);
     if (Io_qpair == NULL) {
       DEBUG ((DEBUG_ERROR, "spdk_nvme_ctrlr_alloc_io_qpair() failed\n"));
       Status = 1;
@@ -294,7 +318,7 @@ NvmeOfCliReset (struct spdk_nvme_ctrlr *Ctrlr, CHAR16 **Key)
     NET_LIST_FOR_EACH (Entry, &gCliCtrlMap->CliCtrlrList) {
       MappingList = NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
       if (Ctrlr == MappingList->Ctrlr) {
-        MappingList->Ioqpair = Io_qpair;
+        MappingList->Ioqpair = (VOID *) Io_qpair;
       }
     }
   } else {
@@ -311,28 +335,32 @@ NvmeOfCliReset (struct spdk_nvme_ctrlr *Ctrlr, CHAR16 **Key)
 
 UINTN
 EFIAPI
-NvmeOfCliVersion ()
+NvmeOfCliVersion (
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This
+  )
 {
   return NVMEOF_DRIVER_VERSION;
 }
 
 /**
-  Nvmeof Cli Disconnect.
+  This function is used to disconnect the NVMe-oF Target device.
 
-  @param  DisconnectData data
+  @param[in]    This            Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+  @param[in]    DisconnectData  Pointer to the NVMEOF_CLI_DISCONNECT structure.
 
-  @retval None
+  @retval    None
+
 **/
-
 VOID
 EFIAPI
 NvmeOfCliDisconnect (
-  NVMEOF_CLI_DISCONNECT DisconnectData,
-  CHAR16 **Key
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This,
+  IN  NVMEOF_CLI_DISCONNECT           *DisconnectData,
+  IN  CHAR16                          **Key
   )
 {
-  spdk_nvme_detach (DisconnectData.Ctrlr);
-  NvmeOfCliDeleteMapEntries (DisconnectData.Ctrlr); 
+  spdk_nvme_detach ((struct spdk_nvme_ctrlr *) DisconnectData->Ctrlr);
+  NvmeOfCliDeleteMapEntries ((struct spdk_nvme_ctrlr *) DisconnectData->Ctrlr);
   Print (L"Disconnected Successfully\n");
 }
 
@@ -368,7 +396,9 @@ GetSerialModelStr (
 **/
 VOID
 EFIAPI
-NvmeOfCliList ()
+NvmeOfCliList (
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This
+  )
 {
   LIST_ENTRY                         *Entry = NULL;
   NVMEOF_CLI_CTRL_MAPPING            *MappingList; 
@@ -381,8 +411,11 @@ NvmeOfCliList ()
 
   NET_LIST_FOR_EACH (Entry, &gCliCtrlMap->CliCtrlrList) {
     MappingList = NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
-    cdata = spdk_nvme_ctrlr_get_data (MappingList->Ctrlr);
-    ns = spdk_nvme_ctrlr_get_ns (MappingList->Ctrlr, MappingList->Nsid);
+    cdata = spdk_nvme_ctrlr_get_data ((struct spdk_nvme_ctrlr *) MappingList->Ctrlr);
+    ns = spdk_nvme_ctrlr_get_ns (
+           (struct spdk_nvme_ctrlr *) MappingList->Ctrlr,
+           MappingList->Nsid
+           );
     sector_size = spdk_nvme_ns_get_sector_size (ns);
     nsdata = spdk_nvme_ns_get_data (ns);    
     uuid = spdk_nvme_ns_get_uuid (ns);
@@ -418,7 +451,9 @@ NvmeOfCliList ()
 
 VOID
 EFIAPI
-NvmeOfCliListConnect ()
+NvmeOfCliListConnect (
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This
+  )
 {
   LIST_ENTRY                         *Entry = NULL;
   NVMEOF_CLI_CTRL_MAPPING            *MappingList;
@@ -431,8 +466,11 @@ NvmeOfCliListConnect ()
 
   NET_LIST_FOR_EACH (Entry, &CtrlrInfo->CliCtrlrList) {
     MappingList = NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
-    cdata = spdk_nvme_ctrlr_get_data (MappingList->Ctrlr);
-    ns = spdk_nvme_ctrlr_get_ns (MappingList->Ctrlr, MappingList->Nsid);
+    cdata = spdk_nvme_ctrlr_get_data ((struct spdk_nvme_ctrlr *) MappingList->Ctrlr);
+    ns = spdk_nvme_ctrlr_get_ns (
+           (struct spdk_nvme_ctrlr *) MappingList->Ctrlr,
+           MappingList->Nsid
+           );
     sector_size = spdk_nvme_ns_get_sector_size (ns);
     nsdata = spdk_nvme_ns_get_data (ns);
     uuid = spdk_nvme_ns_get_uuid (ns);
@@ -459,18 +497,21 @@ NvmeOfCliListConnect ()
 }
 
 /**
-  Write some blocks to the device.
+  This function is used to write one block of data to the NVMe-oF target device.
 
-  @param  WriteData              write data
+  @param[in]    This       Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+  @param[in]    WriteData  Pointer to the NVMEOF_READ_WRITE_DATA structure.
+
   @retval EFI_SUCCESS            Data are written into the buffer.
+  @retval EFI_INVALID_PARAMETER  Invalid parameter.
   @retval EFI_DEVICE_ERROR       Fail to write all the data.
 
 **/
-
 EFI_STATUS
 EFIAPI
 NvmeOfCliWrite (
-  NVMEOF_READ_WRITE_DATA WriteData
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This,
+  IN  NVMEOF_READ_WRITE_DATA          *WriteData
   )
 {
   EFI_STATUS Status           = EFI_SUCCESS;
@@ -479,19 +520,26 @@ NvmeOfCliWrite (
   int        rc               = 0;
 
   /*ctrl and NsId getting from global structure of type  (struct spdk_nvme_dev)*/
-  ns = spdk_nvme_ctrlr_get_ns (WriteData.Ctrlr, WriteData.Nsid);
+  ns = spdk_nvme_ctrlr_get_ns (
+         (struct spdk_nvme_ctrlr *) WriteData->Ctrlr,
+         WriteData->Nsid
+         );
 
   //redirecting to SPDK lib write function
-  Status = spdk_nvme_ns_cmd_write (ns,
-             WriteData.Ioqpair,
-             WriteData.Payload,
-             WriteData.Startblock,
+  Status = spdk_nvme_ns_cmd_write (
+             ns,
+             (struct spdk_nvme_qpair *) WriteData->Ioqpair,
+             WriteData->Payload,
+             WriteData->Startblock,
              1,
              NvmeOfCliIoComplete,
              &Is_Completed,
              0);
   while (!Is_Completed) {
-    rc = spdk_nvme_qpair_process_completions (WriteData.Ioqpair, 0);
+    rc = spdk_nvme_qpair_process_completions (
+           (struct spdk_nvme_qpair *) WriteData->Ioqpair,
+           0
+           );
     if (rc < 0) {
       Status = EFI_DEVICE_ERROR;
       break;
@@ -613,55 +661,66 @@ print_namespace (struct spdk_nvme_ns *ns)
  Print the identify controller data
 */
 
-static 
+static
 NVMEOF_CLI_IDENTIFY
-PrintIdentifyControllerData (NVMEOF_CLI_IDENTIFY IdentifyData)
-{  
-  NVMEOF_CLI_IDENTIFY ReturnData       = { 0 };
-  union spdk_nvme_cap_register cap     = spdk_nvme_ctrlr_get_regs_cap (IdentifyData.Ctrlr);
-  union spdk_nvme_vs_register vs       = spdk_nvme_ctrlr_get_regs_vs (IdentifyData.Ctrlr);
-  union spdk_nvme_cmbsz_register cmbsz = spdk_nvme_ctrlr_get_regs_cmbsz (IdentifyData.Ctrlr);
-  ReturnData.Cdata                     = spdk_nvme_ctrlr_get_data (IdentifyData.Ctrlr);
+PrintIdentifyControllerData (
+  NVMEOF_CLI_IDENTIFY *IdentifyData
+  )
+{
+  NVMEOF_CLI_IDENTIFY                ReturnData = { 0 };
+  union spdk_nvme_cap_register       cap = { 0 };
+  union spdk_nvme_vs_register        vs = { 0 };
+  union spdk_nvme_cmbsz_register     cmbsz = { 0 };
+  const struct spdk_nvme_ctrlr_data  *ReturnCdata = NULL;
+
+  cap = spdk_nvme_ctrlr_get_regs_cap ((struct spdk_nvme_ctrlr *) IdentifyData->Ctrlr);
+  vs = spdk_nvme_ctrlr_get_regs_vs ((struct spdk_nvme_ctrlr *) IdentifyData->Ctrlr);
+  cmbsz = spdk_nvme_ctrlr_get_regs_cmbsz ((struct spdk_nvme_ctrlr *) IdentifyData->Ctrlr);
+
+  ReturnData.Cdata = (VOID *) spdk_nvme_ctrlr_get_data (
+                                (struct spdk_nvme_ctrlr *) IdentifyData->Ctrlr
+                                );
+  ReturnCdata = (struct spdk_nvme_ctrlr_data *) ReturnData.Cdata;
 
   Print (L"=====================================================\n");
   Print (L"Controller Capabilities/Features\n");
   Print (L"================================\n");
-  Print (L"Vendor ID:                             %04d\n", ReturnData.Cdata->vid);
-  Print (L"Subsystem Vendor ID:                   %04d\n", ReturnData.Cdata->ssvid);
+  Print (L"Vendor ID:                             %04d\n", ReturnCdata->vid);
+  Print (L"Subsystem Vendor ID:                   %04d\n", ReturnCdata->ssvid);
   Print (L"Serial Number:                         ");
-  GetSerialModelStr ((const UINT8 *)ReturnData.Cdata->sn);
+  GetSerialModelStr ((const UINT8 *)ReturnCdata->sn);
   Print (L"%a", ReturnStr);
   Print (L"\n");
   Print (L"Model Number:                          ");
-  GetSerialModelStr ((const UINT8 *)ReturnData.Cdata->mn);
+  GetSerialModelStr ((const UINT8 *)ReturnCdata->mn);
   Print (L"%a", ReturnStr);
   Print (L"\n");
   Print (L"Firmware Version:                      ");
-  Print (L"%a", ReturnData.Cdata->fr);
+  Print (L"%a", ReturnCdata->fr);
   Print (L"\n");
-  Print (L"Recommended Arb Burst:                 %d\n", ReturnData.Cdata->rab);
+  Print (L"Recommended Arb Burst:                 %d\n", ReturnCdata->rab);
   Print (L"IEEE OUI Identifier:                   %02d %02d %02d\n",
-    ReturnData.Cdata->ieee[0], ReturnData.Cdata->ieee[1], ReturnData.Cdata->ieee[2]);
+    ReturnCdata->ieee[0], ReturnCdata->ieee[1], ReturnCdata->ieee[2]);
   Print (L"Multi-path I/O\n");
-  Print (L"May have multiple subsystem ports:     %a\n", ReturnData.Cdata->cmic.multi_port ? "Yes" : "No");
-  Print (L"May be connected to multiple hosts:    %a\n", ReturnData.Cdata->cmic.multi_host ? "Yes" : "No");
-  Print (L"Associated with SR-IOV VF:             %a\n", ReturnData.Cdata->cmic.sr_iov ? "Yes" : "No");
+  Print (L"May have multiple subsystem ports:     %a\n", ReturnCdata->cmic.multi_port ? "Yes" : "No");
+  Print (L"May be connected to multiple hosts:    %a\n", ReturnCdata->cmic.multi_host ? "Yes" : "No");
+  Print (L"Associated with SR-IOV VF:             %a\n", ReturnCdata->cmic.sr_iov ? "Yes" : "No");
   Print (L"Max Data Transfer Size:                ");
-  if (ReturnData.Cdata->mdts == 0) {
+  if (ReturnCdata->mdts == 0) {
     Print (L"Unlimited\n");
   } else {
-    Print (L"%" PRIu64 "\n", (uint64_t)1 << (12 + cap.bits.mpsmin + ReturnData.Cdata->mdts));
+    Print (L"%" PRIu64 "\n", (uint64_t)1 << (12 + cap.bits.mpsmin + ReturnCdata->mdts));
   }
-  Print (L"Max Number of Namespaces:              %d\n", ReturnData.Cdata->nn);
+  Print (L"Max Number of Namespaces:              %d\n", ReturnCdata->nn);
   Print (L"NVMe Specification Version (VS):       %d.%d", vs.bits.mjr, vs.bits.mnr);
   if (vs.bits.ter) {
     Print (L".%d", vs.bits.ter);
   }
   Print (L"\n");
-  if (ReturnData.Cdata->ver.raw != 0) {
-    Print (L"NVMe Specification Version (Identify): %d.%d", ReturnData.Cdata->ver.bits.mjr, ReturnData.Cdata->ver.bits.mnr);
-    if (ReturnData.Cdata->ver.bits.ter) {
-      Print (L".%d", ReturnData.Cdata->ver.bits.ter);
+  if (ReturnCdata->ver.raw != 0) {
+    Print (L"NVMe Specification Version (Identify): %d.%d", ReturnCdata->ver.bits.mjr, ReturnCdata->ver.bits.mnr);
+    if (ReturnCdata->ver.bits.ter) {
+      Print (L".%d", ReturnCdata->ver.bits.ter);
     }
     Print (L"\n");
   }
@@ -689,12 +748,12 @@ PrintIdentifyControllerData (NVMEOF_CLI_IDENTIFY IdentifyData)
     (uint64_t)1 << (12 + cap.bits.mpsmax));
   Print (L"Optional Asynchronous Events Supported\n");
   Print (L"  Namespace Attribute Notices:         %a\n",
-    ReturnData.Cdata->oaes.ns_attribute_notices ? "Supported" : "Not Supported");
+    ReturnCdata->oaes.ns_attribute_notices ? "Supported" : "Not Supported");
   Print (L"  Firmware Activation Notices:         %a\n",
-    ReturnData.Cdata->oaes.fw_activation_notices ? "Supported" : "Not Supported");
+    ReturnCdata->oaes.fw_activation_notices ? "Supported" : "Not Supported");
 
   Print (L"128-bit Host Identifier:               %a\n",
-    ReturnData.Cdata->ctratt.host_id_exhid_supported ? "Supported" : "Not Supported");
+    ReturnCdata->ctratt.host_id_exhid_supported ? "Supported" : "Not Supported");
   Print (L"\n");
 
   Print (L"Controller Memory Buffer Support\n");
@@ -724,136 +783,136 @@ PrintIdentifyControllerData (NVMEOF_CLI_IDENTIFY IdentifyData)
   Print (L"Admin Command Set Attributes\n");
   Print (L"============================\n");
   Print (L"Security Send/Receive:                 %a\n",
-    ReturnData.Cdata->oacs.security ? "Supported" : "Not Supported");
+    ReturnCdata->oacs.security ? "Supported" : "Not Supported");
   Print (L"Format NVM:                            %a\n",
-    ReturnData.Cdata->oacs.format ? "Supported" : "Not Supported");
+    ReturnCdata->oacs.format ? "Supported" : "Not Supported");
   Print (L"Firmware Activate/Download:            %a\n",
-    ReturnData.Cdata->oacs.firmware ? "Supported" : "Not Supported");
+    ReturnCdata->oacs.firmware ? "Supported" : "Not Supported");
   Print (L"Namespace Management:                  %a\n",
-    ReturnData.Cdata->oacs.ns_manage ? "Supported" : "Not Supported");
+    ReturnCdata->oacs.ns_manage ? "Supported" : "Not Supported");
   Print (L"Device Self-Test:                      %a\n",
-    ReturnData.Cdata->oacs.device_self_test ? "Supported" : "Not Supported");
+    ReturnCdata->oacs.device_self_test ? "Supported" : "Not Supported");
   Print (L"Directives:                            %a\n",
-    ReturnData.Cdata->oacs.directives ? "Supported" : "Not Supported");
+    ReturnCdata->oacs.directives ? "Supported" : "Not Supported");
   Print (L"NVMe-MI:                               %a\n",
-    ReturnData.Cdata->oacs.nvme_mi ? "Supported" : "Not Supported");
+    ReturnCdata->oacs.nvme_mi ? "Supported" : "Not Supported");
   Print (L"Virtualization Management:             %a\n",
-    ReturnData.Cdata->oacs.virtualization_management ? "Supported" : "Not Supported");
+    ReturnCdata->oacs.virtualization_management ? "Supported" : "Not Supported");
   Print (L"Doorbell Buffer Config:                %a\n",
-    ReturnData.Cdata->oacs.doorbell_buffer_config ? "Supported" : "Not Supported");
-  Print (L"Abort Command Limit:                   %d\n", ReturnData.Cdata->acl + 1);
-  Print (L"Async Event Request Limit:             %d\n", ReturnData.Cdata->aerl + 1);
+    ReturnCdata->oacs.doorbell_buffer_config ? "Supported" : "Not Supported");
+  Print (L"Abort Command Limit:                   %d\n", ReturnCdata->acl + 1);
+  Print (L"Async Event Request Limit:             %d\n", ReturnCdata->aerl + 1);
   Print (L"Number of Firmware Slots:              ");
-  if (ReturnData.Cdata->oacs.firmware != 0) {
-    Print (L"%d\n", ReturnData.Cdata->frmw.num_slots);
+  if (ReturnCdata->oacs.firmware != 0) {
+    Print (L"%d\n", ReturnCdata->frmw.num_slots);
   } else {
     Print (L"N/A\n");
   }
   Print (L"Firmware Slot 1 Read-Only:             ");
-  if (ReturnData.Cdata->oacs.firmware != 0) {
-    Print (L"%a\n", ReturnData.Cdata->frmw.slot1_ro ? "Yes" : "No");
+  if (ReturnCdata->oacs.firmware != 0) {
+    Print (L"%a\n", ReturnCdata->frmw.slot1_ro ? "Yes" : "No");
   } else {
     Print (L"N/A\n");
   }
-  if (ReturnData.Cdata->fwug == 0x00) {
+  if (ReturnCdata->fwug == 0x00) {
     Print (L"Firmware Update Granularity:           No Information Provided\n");
-  } else if (ReturnData.Cdata->fwug == 0xFF) {
+  } else if (ReturnCdata->fwug == 0xFF) {
     Print (L"Firmware Update Granularity:           No Restriction\n");
   } else {
     Print (L"Firmware Update Granularity:           %u KiB\n",
-      ReturnData.Cdata->fwug * 4);
+      ReturnCdata->fwug * 4);
   }
   Print (L"Per-Namespace SMART Log:               %a\n",
-    ReturnData.Cdata->lpa.ns_smart ? "Yes" : "No");
+    ReturnCdata->lpa.ns_smart ? "Yes" : "No");
   Print (L"Command Effects Log Page:              %a\n",
-    ReturnData.Cdata->lpa.celp ? "Supported" : "Not Supported");
+    ReturnCdata->lpa.celp ? "Supported" : "Not Supported");
   Print (L"Get Log Page Extended Data:            %a\n",
-    ReturnData.Cdata->lpa.edlp ? "Supported" : "Not Supported");
+    ReturnCdata->lpa.edlp ? "Supported" : "Not Supported");
   Print (L"Telemetry Log Pages:                   %a\n",
-    ReturnData.Cdata->lpa.telemetry ? "Supported" : "Not Supported");
-  Print (L"Error Log Page Entries Supported:      %d\n", ReturnData.Cdata->elpe + 1);
-  if (ReturnData.Cdata->kas == 0) {
+    ReturnCdata->lpa.telemetry ? "Supported" : "Not Supported");
+  Print (L"Error Log Page Entries Supported:      %d\n", ReturnCdata->elpe + 1);
+  if (ReturnCdata->kas == 0) {
     Print (L"Keep Alive:                            Not Supported\n");
   } else {
     Print (L"Keep Alive:                            Supported\n");
     Print (L"Keep Alive Granularity:                %u ms\n",
-      ReturnData.Cdata->kas * 100);
+      ReturnCdata->kas * 100);
   }
   Print (L"\n");
 
   Print (L"NVM Command Set Attributes\n");
   Print (L"==========================\n");
   Print (L"Submission Queue Entry Size\n");
-  Print (L"  Max:                       %d\n", 1 << ReturnData.Cdata->sqes.max);
-  Print (L"  Min:                       %d\n", 1 << ReturnData.Cdata->sqes.min);
+  Print (L"  Max:                       %d\n", 1 << ReturnCdata->sqes.max);
+  Print (L"  Min:                       %d\n", 1 << ReturnCdata->sqes.min);
   Print (L"Completion Queue Entry Size\n");
-  Print (L"  Max:                       %d\n", 1 << ReturnData.Cdata->cqes.max);
-  Print (L"  Min:                       %d\n", 1 << ReturnData.Cdata->cqes.min);
-  Print (L"Number of Namespaces:        %d\n", ReturnData.Cdata->nn);
+  Print (L"  Max:                       %d\n", 1 << ReturnCdata->cqes.max);
+  Print (L"  Min:                       %d\n", 1 << ReturnCdata->cqes.min);
+  Print (L"Number of Namespaces:        %d\n", ReturnCdata->nn);
   Print (L"Compare Command:             %a\n",
-    ReturnData.Cdata->oncs.compare ? "Supported" : "Not Supported");
+    ReturnCdata->oncs.compare ? "Supported" : "Not Supported");
   Print (L"Write Uncorrectable Command: %a\n",
-    ReturnData.Cdata->oncs.write_unc ? "Supported" : "Not Supported");
+    ReturnCdata->oncs.write_unc ? "Supported" : "Not Supported");
   Print (L"Dataset Management Command:  %a\n",
-    ReturnData.Cdata->oncs.dsm ? "Supported" : "Not Supported");
+    ReturnCdata->oncs.dsm ? "Supported" : "Not Supported");
   Print (L"Write Zeroes Command:        %a\n",
-    ReturnData.Cdata->oncs.write_zeroes ? "Supported" : "Not Supported");
+    ReturnCdata->oncs.write_zeroes ? "Supported" : "Not Supported");
   Print (L"Set Features Save Field:     %a\n",
-    ReturnData.Cdata->oncs.set_features_save ? "Supported" : "Not Supported");
+    ReturnCdata->oncs.set_features_save ? "Supported" : "Not Supported");
   Print (L"Reservations:                %a\n",
-    ReturnData.Cdata->oncs.reservations ? "Supported" : "Not Supported");
+    ReturnCdata->oncs.reservations ? "Supported" : "Not Supported");
   Print (L"Timestamp:                   %a\n",
-    ReturnData.Cdata->oncs.timestamp ? "Supported" : "Not Supported");
+    ReturnCdata->oncs.timestamp ? "Supported" : "Not Supported");
   Print (L"Volatile Write Cache:        %a\n",
-    ReturnData.Cdata->vwc.present ? "Present" : "Not Present");
-  Print (L"Atomic Write Unit (Normal):  %d\n", ReturnData.Cdata->awun + 1);
-  Print (L"Atomic Write Unit (PFail):   %d\n", ReturnData.Cdata->awupf + 1);
-  Print (L"Atomic Compare & Write Unit: %d\n", ReturnData.Cdata->acwu + 1);
+    ReturnCdata->vwc.present ? "Present" : "Not Present");
+  Print (L"Atomic Write Unit (Normal):  %d\n", ReturnCdata->awun + 1);
+  Print (L"Atomic Write Unit (PFail):   %d\n", ReturnCdata->awupf + 1);
+  Print (L"Atomic Compare & Write Unit: %d\n", ReturnCdata->acwu + 1);
   Print (L"Fused Compare & Write:       %a\n",
-    ReturnData.Cdata->fuses.compare_and_write ? "Supported" : "Not Supported");
+    ReturnCdata->fuses.compare_and_write ? "Supported" : "Not Supported");
   Print (L"Scatter-Gather List\n");
   Print (L"  SGL Command Set:           %a\n",
-    ReturnData.Cdata->sgls.supported == SPDK_NVME_SGLS_SUPPORTED ? "Supported" :
-    ReturnData.Cdata->sgls.supported == SPDK_NVME_SGLS_SUPPORTED_DWORD_ALIGNED ? "Supported (Dword aligned)" :
+    ReturnCdata->sgls.supported == SPDK_NVME_SGLS_SUPPORTED ? "Supported" :
+    ReturnCdata->sgls.supported == SPDK_NVME_SGLS_SUPPORTED_DWORD_ALIGNED ? "Supported (Dword aligned)" :
     "Not Supported");
   Print(L"  SGL Keyed:                 %a\n",
-    ReturnData.Cdata->sgls.keyed_sgl ? "Supported" : "Not Supported");
+    ReturnCdata->sgls.keyed_sgl ? "Supported" : "Not Supported");
   Print (L"  SGL Bit Bucket Descriptor: %a\n",
-    ReturnData.Cdata->sgls.bit_bucket_descriptor ? "Supported" : "Not Supported");
+    ReturnCdata->sgls.bit_bucket_descriptor ? "Supported" : "Not Supported");
   Print (L"  SGL Metadata Pointer:      %a\n",
-    ReturnData.Cdata->sgls.metadata_pointer ? "Supported" : "Not Supported");
+    ReturnCdata->sgls.metadata_pointer ? "Supported" : "Not Supported");
   Print (L"  Oversized SGL:             %a\n",
-    ReturnData.Cdata->sgls.oversized_sgl ? "Supported" : "Not Supported");
+    ReturnCdata->sgls.oversized_sgl ? "Supported" : "Not Supported");
   Print (L"  SGL Metadata Address:      %a\n",
-    ReturnData.Cdata->sgls.metadata_address ? "Supported" : "Not Supported");
+    ReturnCdata->sgls.metadata_address ? "Supported" : "Not Supported");
   Print (L"  SGL Offset:                %a\n",
-    ReturnData.Cdata->sgls.sgl_offset ? "Supported" : "Not Supported");
+    ReturnCdata->sgls.sgl_offset ? "Supported" : "Not Supported");
   Print (L"  Transport SGL Data Block:  %a\n",
-    ReturnData.Cdata->sgls.transport_sgl ? "Supported" : "Not Supported");
+    ReturnCdata->sgls.transport_sgl ? "Supported" : "Not Supported");
   Print (L"Replay Protected Memory Block:");
-  if (ReturnData.Cdata->rpmbs.num_rpmb_units > 0) {
+  if (ReturnCdata->rpmbs.num_rpmb_units > 0) {
     Print (L"  Supported\n");
-    Print (L"  Number of RPMB Units:  %d\n", ReturnData.Cdata->rpmbs.num_rpmb_units);
-    Print (L"  Authentication Method: %a\n", ReturnData.Cdata->rpmbs.auth_method == 0 ? "HMAC SHA-256" : "Unknown");
-    Print (L"  Total Size (in 128KB units) = %d\n", ReturnData.Cdata->rpmbs.total_size + 1);
-    Print (L"  Access Size (in 512B units) = %d\n", ReturnData.Cdata->rpmbs.access_size + 1);
+    Print (L"  Number of RPMB Units:  %d\n", ReturnCdata->rpmbs.num_rpmb_units);
+    Print (L"  Authentication Method: %a\n", ReturnCdata->rpmbs.auth_method == 0 ? "HMAC SHA-256" : "Unknown");
+    Print (L"  Total Size (in 128KB units) = %d\n", ReturnCdata->rpmbs.total_size + 1);
+    Print (L"  Access Size (in 512B units) = %d\n", ReturnCdata->rpmbs.access_size + 1);
   } else {
     Print (L"  Not Supported\n");
   }
   Print (L"\n");
 
-  if (ReturnData.Cdata->hctma.bits.supported) {
+  if (ReturnCdata->hctma.bits.supported) {
     Print (L"Host Controlled Thermal Management\n");
     Print (L"==================================\n");
     Print (L"Minimum Thermal Management Temperature:  ");
-    if (ReturnData.Cdata->mntmt) {
-      Print (L"%u Kelvin (%d Celsius)\n", ReturnData.Cdata->mntmt, (int)ReturnData.Cdata->mntmt - 273);
+    if (ReturnCdata->mntmt) {
+      Print (L"%u Kelvin (%d Celsius)\n", ReturnCdata->mntmt, (int)ReturnCdata->mntmt - 273);
     } else {
       Print (L"Not Reported\n");
     }
     Print (L"Maximum Thermal Managment Temperature:   ");
-    if (ReturnData.Cdata->mxtmt) {
-      Print (L"%u Kelvin (%d Celsius)\n", ReturnData.Cdata->mxtmt, (int)ReturnData.Cdata->mxtmt - 273);
+    if (ReturnCdata->mxtmt) {
+      Print (L"%u Kelvin (%d Celsius)\n", ReturnCdata->mxtmt, (int)ReturnCdata->mxtmt - 273);
     } else {
       Print (L"Not Reported\n");
     }
@@ -862,21 +921,32 @@ PrintIdentifyControllerData (NVMEOF_CLI_IDENTIFY IdentifyData)
 
   Print (L"Active Namespace\n");
   Print (L"=================\n");
-  print_namespace (spdk_nvme_ctrlr_get_ns (IdentifyData.Ctrlr, IdentifyData.NsId));
+  print_namespace (
+    spdk_nvme_ctrlr_get_ns (
+      (struct spdk_nvme_ctrlr *) IdentifyData->Ctrlr,
+      IdentifyData->NsId
+      )
+    );
   return ReturnData;
 }
 
 /**
-  the identify command data for given name space
+  This function is used to print the target controller and namespace information by
+  sending NVMe identify command.
 
-  @param  IdentifyData           Identify Data
+  @param[in]    This          Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+  @param[in]    IdentifyData  Pointer to NVMEOF_CLI_IDENTIFY structure.
 
-  @retval EFI_SUCCESS            .
+  @return ReturnData          Pointer to NVMEOF_CLI_IDENTIFY structure that contains information
+                              retrieved from Target device.
 
 **/
 NVMEOF_CLI_IDENTIFY
 EFIAPI
-NvmeOfCliIdentify (NVMEOF_CLI_IDENTIFY IdentifyData)
+NvmeOfCliIdentify (
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This,
+  IN  NVMEOF_CLI_IDENTIFY             *IdentifyData
+  )
 {
   NVMEOF_CLI_IDENTIFY    ReturnData;
 
@@ -884,22 +954,31 @@ NvmeOfCliIdentify (NVMEOF_CLI_IDENTIFY IdentifyData)
   return ReturnData;
 }
 
+NVMEOF_CLI_CTRL_MAPPING**
+EFIAPI
+NvmeOfCliGetCtrlMap (
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This
+  )
+{
+  return &gCliCtrlMap;
+}
+
 /*
   EFI Protocol call back function
 */
-NVMEOF_PASSTHROUGH_PROTOCOL gNvmeofPassThroughInstance = {
-                              NvmeOfCliConnect,
-                              NvmeOfCliRead,
-                              NvmeOfCliWrite,
-                              NvmeOfCliIdentify,
-                              NvmeOfCliDisconnect,
-                              NvmeOfCliReset,
-                              NvmeOfCliList,
-                              NvmeOfCliListConnect,
-                              NvmeOfCliVersion,
-                              &gCliCtrlMap,
-                              NvmeOfGetBootDesc
-                              };
+EDKII_NVMEOF_PASSTHRU_PROTOCOL gNvmeofPassThroughInstance = {
+                                 NvmeOfCliConnect,
+                                 NvmeOfCliRead,
+                                 NvmeOfCliWrite,
+                                 NvmeOfCliIdentify,
+                                 NvmeOfCliDisconnect,
+                                 NvmeOfCliReset,
+                                 NvmeOfCliList,
+                                 NvmeOfCliListConnect,
+                                 NvmeOfCliVersion,
+                                 NvmeOfCliGetCtrlMap,
+                                 NvmeOfCliGetBootDesc
+                                 };
 
 STATIC
 BOOLEAN
@@ -1000,10 +1079,10 @@ NvmeOfAttachCliCallback (
       Print(L"Error allocating MaapingData\n");
       return;
     }
-    MappingData->Ctrlr = Ctrlr;
+    MappingData->Ctrlr = (VOID *) Ctrlr;
     sprintf (Key, "nvme%dn%d", Cntliduser, ActiveNs);// Node : Eg nvme0n1,nvme0n2 
     strcpy (MappingData->Key, Key);
-    MappingData->Ioqpair = Device->qpair;
+    MappingData->Ioqpair = (VOID *) Device->qpair;
     MappingData->Nsid = Device->NamespaceId;
     strcpy (MappingData->Traddr, Trid->traddr);
     strcpy (MappingData->Subnqn, Trid->subnqn);
@@ -1112,11 +1191,13 @@ NvmeOfCliProbeControllers (
   /**
   Install Controller Handler
 
-  @param  NVMEOF_CONNECT_COMMAND     connect data
+  @param[in]  NVMEOF_CONNECT_COMMAND     connect data.
 
-  @retval EFI_SUCCESS                    All OK
-  @retval EFI_OUT_OF_RESOURCES           Out of Resources
-  @retval EFI_NOT_FOUND                  Resource Not Found
+  @retval EFI_SUCCESS                    All OK.
+  @retval EFI_OUT_OF_RESOURCES           Out of Resources.
+  @retval EFI_NOT_FOUND                  Resource Not Found.
+  @retval EFI_INVALID_PARAMETER          Invalid Parameter.
+
 **/
 
 EFI_STATUS
