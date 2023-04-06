@@ -989,6 +989,10 @@ NvmeOfCliProbeCallback (
   )
 {
   EFI_GUID  NvmeOfCliUuid = NVMEOF_CLI_UUID;
+  NVMEOF_DRIVER_DATA            *Private;
+  struct spdk_edk_sock_ctx      *Context;
+  NVMEOF_ATTEMPT_CONFIG_NVDATA  *AttemptData;
+  
   DEBUG ((DEBUG_INFO, "Passthrough, Attaching to %a\n", Trid->traddr));
   //For CLI use Zero KATO
   Opts->keep_alive_timeout_ms = 0;
@@ -998,6 +1002,36 @@ NvmeOfCliProbeCallback (
       CopyMem (Opts->hostnqn, ProbeconnectData->Hostnqn, sizeof (ProbeconnectData->Hostnqn));
     }
   }
+
+  // Fill socket context
+  Private     = (NVMEOF_DRIVER_DATA*)CallbackCtx;
+  Context     = &Private->Attempt->SocketContext;
+  AttemptData = &Private->Attempt->Data;
+
+  Context->Controller = Private->Controller;
+  Context->IsIp6      = AttemptData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP6;
+
+  if (!Context->IsIp6) {
+    CopyMem (
+      &Context->StationIp.v4,
+      &AttemptData->SubsysConfigData.NvmeofSubsysHostIP,
+      sizeof (EFI_IPv4_ADDRESS)
+      );
+
+    CopyMem (
+      &Context->SubnetMask.v4,
+      &AttemptData->SubsysConfigData.NvmeofSubsysHostSubnetMask,
+      sizeof (EFI_IPv4_ADDRESS)
+      );
+
+    CopyMem (
+      &Context->GatewayIp.v4,
+      &AttemptData->SubsysConfigData.NvmeofSubsysHostGateway.v4,
+      sizeof (EFI_IPv4_ADDRESS)
+      );
+  }
+
+  Opts->sock_ctx = Context;
   return TRUE;
 }
 
