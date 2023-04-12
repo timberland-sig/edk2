@@ -90,20 +90,24 @@ NvmeOfCliDeleteMapEntries (
   )
 {
   LIST_ENTRY               *Entry;
+  LIST_ENTRY               *NextEntryProcessed = NULL;
   NVMEOF_CLI_CTRL_MAPPING  *MappingList;
   BOOLEAN                  Flag = FALSE;
 
-  NET_LIST_FOR_EACH (Entry, &gCliCtrlMap->CliCtrlrList) {
+  NET_LIST_FOR_EACH_SAFE (Entry, NextEntryProcessed, &gCliCtrlMap->CliCtrlrList) {
     MappingList = NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
     if (MappingList->Ctrlr == Ctrlr) {
+      FreePool (((NVMEOF_DRIVER_DATA *)MappingList->Private)->Attempt);
+      FreePool (MappingList->Private);
       RemoveEntryList (&MappingList->CliCtrlrList);
+      FreePool (MappingList);
       Flag = TRUE;
     }
   }
   if (Flag == FALSE) {
     DEBUG ((EFI_D_ERROR, "NvmeOfCliDeleteMapKey: Error in removing MapKey\n"));
     Print (L"Error in removing device key\n");
-  }  
+  }
 }
 
 /**
@@ -118,18 +122,12 @@ NvmeOfCliCleanup ()
   LIST_ENTRY                *NextEntryProcessed = NULL;
   NVMEOF_CLI_CTRL_MAPPING   *MappingList = NULL;
   UINT16                    PrevCntliduser = 0;
-  struct spdk_nvme_ctrlr    *ctrlr;
-  VOID                      *sock_ctx;
+
 
   NET_LIST_FOR_EACH_SAFE (Entry, NextEntryProcessed, &gCliCtrlMap->CliCtrlrList) {
     MappingList = NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
     if (PrevCntliduser != MappingList->Cntliduser) {
-      ctrlr = (struct spdk_nvme_ctrlr *) MappingList->Ctrlr;
-      sock_ctx = ctrlr->opts.sock_ctx;
-      spdk_nvme_detach (ctrlr);
-      if (sock_ctx != NULL) {
-        FreePool (sock_ctx);
-      }
+      spdk_nvme_detach ((struct spdk_nvme_ctrlr *) MappingList->Ctrlr);
       PrevCntliduser = MappingList->Cntliduser;
     }
     RemoveEntryList (&MappingList->CliCtrlrList);
@@ -380,18 +378,10 @@ NvmeOfCliDisconnect (
   IN  CHAR16                          **Key
   )
 {
-  struct spdk_nvme_ctrlr *ctrlr;
-  VOID                   *sock_ctx;
-
-  ctrlr = (struct spdk_nvme_ctrlr *) DisconnectData->Ctrlr;
-  sock_ctx = ctrlr->opts.sock_ctx;
-  spdk_nvme_detach (ctrlr);
-
-  if (sock_ctx != NULL) {
-    FreePool (sock_ctx);
-  }
-  NvmeOfCliDeleteMapEntries (ctrlr);
+  spdk_nvme_detach ((struct spdk_nvme_ctrlr *)DisconnectData->Ctrlr);
+  NvmeOfCliDeleteMapEntries ((struct spdk_nvme_ctrlr *)DisconnectData->Ctrlr); 
   Print (L"Disconnected Successfully\n");
+
 }
 
 /*
@@ -1051,11 +1041,8 @@ NvmeOfCliProbeCallback (
   // Fill socket context
   Private     = (NVMEOF_DRIVER_DATA*)CallbackCtx;
   AttemptData = &Private->Attempt->Data;
+  Context     = &Private->Attempt->SocketContext;
 
-  Context = (struct spdk_edk_sock_ctx *)AllocateZeroPool (sizeof (struct spdk_edk_sock_ctx));
-  if (Context == NULL) {
-    return FALSE;
-  }
   Context->Controller = Private->Controller;
   Context->IsIp6      = AttemptData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP6;
 
@@ -1168,7 +1155,8 @@ NvmeOfAttachCliCallback (
     MappingData->Nsid = Device->NamespaceId;
     strcpy (MappingData->Traddr, Trid->traddr);
     strcpy (MappingData->Subnqn, Trid->subnqn);
-    MappingData->Cntliduser = Cntliduser;    
+    MappingData->Cntliduser = Cntliduser;
+    MappingData->Private = Private;
     ActiveNs++;
     InsertTailList (&gCliCtrlMap->CliCtrlrList, &MappingData->CliCtrlrList);
 
@@ -1405,6 +1393,5 @@ InstallControllerHandler (
     Status = EFI_INVALID_PARAMETER;
     Print (L"The specified MacId is not from this system\n");
   }
-  FreePool (AttemptEntry);
   return Status;
 }
