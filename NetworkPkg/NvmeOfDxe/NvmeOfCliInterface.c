@@ -119,16 +119,17 @@ NvmeOfCliCleanup ()
   NVMEOF_CLI_CTRL_MAPPING   *MappingList = NULL;
   UINT16                    PrevCntliduser = 0;
   struct spdk_nvme_ctrlr    *ctrlr;
+  VOID                      *sock_ctx;
 
   NET_LIST_FOR_EACH_SAFE (Entry, NextEntryProcessed, &gCliCtrlMap->CliCtrlrList) {
     MappingList = NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
     if (PrevCntliduser != MappingList->Cntliduser) {
       ctrlr = (struct spdk_nvme_ctrlr *) MappingList->Ctrlr;
-      if (ctrlr->opts.sock_ctx != NULL) {
-        FreePool (ctrlr->opts.sock_ctx);
-        ctrlr->opts.sock_ctx = NULL;
-      }
+      sock_ctx = ctrlr->opts.sock_ctx;
       spdk_nvme_detach (ctrlr);
+      if (sock_ctx != NULL) {
+        FreePool (sock_ctx);
+      }
       PrevCntliduser = MappingList->Cntliduser;
     }
     RemoveEntryList (&MappingList->CliCtrlrList);
@@ -380,14 +381,15 @@ NvmeOfCliDisconnect (
   )
 {
   struct spdk_nvme_ctrlr *ctrlr;
+  VOID                   *sock_ctx;
 
   ctrlr = (struct spdk_nvme_ctrlr *) DisconnectData->Ctrlr;
-  if (ctrlr->opts.sock_ctx != NULL) {
-    FreePool (ctrlr->opts.sock_ctx);
-    ctrlr->opts.sock_ctx = NULL;
-  }
-
+  sock_ctx = ctrlr->opts.sock_ctx;
   spdk_nvme_detach (ctrlr);
+
+  if (sock_ctx != NULL) {
+    FreePool (sock_ctx);
+  }
   NvmeOfCliDeleteMapEntries (ctrlr);
   Print (L"Disconnected Successfully\n");
 }
@@ -1052,7 +1054,7 @@ NvmeOfCliProbeCallback (
 
   Context = (struct spdk_edk_sock_ctx *)AllocateZeroPool (sizeof (struct spdk_edk_sock_ctx));
   if (Context == NULL) {
-    return;
+    return FALSE;
   }
   Context->Controller = Private->Controller;
   Context->IsIp6      = AttemptData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP6;
