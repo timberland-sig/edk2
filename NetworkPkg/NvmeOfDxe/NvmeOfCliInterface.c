@@ -93,12 +93,18 @@ NvmeOfCliDeleteMapEntries (
   LIST_ENTRY               *NextEntryProcessed = NULL;
   NVMEOF_CLI_CTRL_MAPPING  *MappingList;
   BOOLEAN                  Flag = FALSE;
+  VOID                     *Attempt = NULL;
+  VOID                     *Private = NULL;
+  
 
   NET_LIST_FOR_EACH_SAFE (Entry, NextEntryProcessed, &gCliCtrlMap->CliCtrlrList) {
     MappingList = NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
     if (MappingList->Ctrlr == Ctrlr) {
-      FreePool (((NVMEOF_DRIVER_DATA *)MappingList->Private)->Attempt);
-      FreePool (MappingList->Private);
+	  if (MappingList->Private != Private) {
+	  	Private = MappingList->Private;
+        FreePool (((NVMEOF_DRIVER_DATA *)MappingList->Private)->Attempt);
+        FreePool (MappingList->Private);
+	  }
       RemoveEntryList (&MappingList->CliCtrlrList);
       FreePool (MappingList);
       Flag = TRUE;
