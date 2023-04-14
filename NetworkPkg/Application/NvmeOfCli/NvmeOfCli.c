@@ -40,7 +40,7 @@
 
 struct spdk_nvme_ctrlr   *gctrlr;
 struct spdk_nvme_qpair   *gIoQpair;
-NVMEOF_PASSTHROUGH_PROTOCOL *NvmeofPassThroughProtocol;
+EDKII_NVMEOF_PASSTHRU_PROTOCOL *NvmeofPassThroughProtocol;
 
 /**
 Compare read and write data synchronously from device
@@ -249,7 +249,9 @@ NvmeOfCliGetNsid (CHAR16 **MapKey)
   BOOLEAN                  Flag = FALSE;
   LIST_ENTRY               *Entry = NULL;
   NVMEOF_CLI_CTRL_MAPPING  *MappingList = NULL;
-  NVMEOF_CLI_CTRL_MAPPING  **CtrlStruct = NvmeofPassThroughProtocol->CliCtrlMap;
+  NVMEOF_CLI_CTRL_MAPPING  **CtrlStruct = NULL;
+
+  CtrlStruct = NvmeofPassThroughProtocol-> GetCtrlMap (NvmeofPassThroughProtocol);
 
   UnicodeStrToAsciiStrS (MapKey[2], MapKey8, 10);
   NET_LIST_FOR_EACH (Entry, &(*CtrlStruct)->CliCtrlrList) {
@@ -285,7 +287,9 @@ NvmeOfCliIsConnected ()
   CHAR8                    Clinqn[NVMEOF_CLI_MAX_SIZE];
   LIST_ENTRY               *Entry = NULL;
   NVMEOF_CLI_CTRL_MAPPING  *MappingList = NULL;
-  NVMEOF_CLI_CTRL_MAPPING  **CtrlStruct = NvmeofPassThroughProtocol->CliCtrlMap; 
+  NVMEOF_CLI_CTRL_MAPPING  **CtrlStruct = NULL;
+
+  CtrlStruct = NvmeofPassThroughProtocol-> GetCtrlMap (NvmeofPassThroughProtocol);
 
   NET_LIST_FOR_EACH (Entry, &(*CtrlStruct)->CliCtrlrList) {
     MappingList = NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
@@ -319,13 +323,15 @@ NvmeOfCliGetQpair (CHAR16 **MapKey)
   BOOLEAN                  Flag = FALSE;
   LIST_ENTRY               *Entry = NULL;
   NVMEOF_CLI_CTRL_MAPPING  *MappingList = NULL;
-  NVMEOF_CLI_CTRL_MAPPING  **CtrlStruct = NvmeofPassThroughProtocol->CliCtrlMap;
+  NVMEOF_CLI_CTRL_MAPPING  **CtrlStruct = NULL;
+
+  CtrlStruct = NvmeofPassThroughProtocol-> GetCtrlMap (NvmeofPassThroughProtocol);
 
   UnicodeStrToAsciiStrS (MapKey[2], MapKey8, 10);
   NET_LIST_FOR_EACH (Entry, &(*CtrlStruct)->CliCtrlrList) {
     MappingList = NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
     if (!AsciiStriCmp (MapKey8, MappingList->Key)) {
-      gIoQpair = MappingList->Ioqpair;
+      gIoQpair = (struct spdk_nvme_qpair *) MappingList->Ioqpair;
       Flag = TRUE;
       break;
     }
@@ -356,13 +362,15 @@ NvmeOfCliGetController (CHAR16 **MapKey)
   BOOLEAN                 Flag = FALSE;
   LIST_ENTRY              *Entry = NULL;
   NVMEOF_CLI_CTRL_MAPPING *MappingList = NULL;
-  NVMEOF_CLI_CTRL_MAPPING **CtrlStruct = NvmeofPassThroughProtocol->CliCtrlMap;
+  NVMEOF_CLI_CTRL_MAPPING **CtrlStruct = NULL;
+
+  CtrlStruct = NvmeofPassThroughProtocol-> GetCtrlMap (NvmeofPassThroughProtocol);
 
   UnicodeStrToAsciiStrS (MapKey[2], MapKey8, 10);
   NET_LIST_FOR_EACH (Entry, &(*CtrlStruct)->CliCtrlrList) {
     MappingList = NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
     if (!AsciiStriCmp (MapKey8, MappingList->Key)) {
-      gctrlr = MappingList->Ctrlr;
+      gctrlr = (struct spdk_nvme_ctrlr *) MappingList->Ctrlr;
       Flag = TRUE;
       break;
     }
@@ -393,15 +401,17 @@ NvmeOfCliGetControllerQpair (CHAR16 **MapKey)
   BOOLEAN                  Flag = FALSE;
   LIST_ENTRY               *Entry = NULL;
   NVMEOF_CLI_CTRL_MAPPING  *MappingList = NULL;
-  NVMEOF_CLI_CTRL_MAPPING  **CtrlStruct = NvmeofPassThroughProtocol->CliCtrlMap;
+  NVMEOF_CLI_CTRL_MAPPING  **CtrlStruct = NULL;
+
+  CtrlStruct = NvmeofPassThroughProtocol-> GetCtrlMap (NvmeofPassThroughProtocol);
 
   UnicodeStrToAsciiStrS (MapKey[2], MapKey8, 20);
   NET_LIST_FOR_EACH (Entry, &(*CtrlStruct)->CliCtrlrList) {
     MappingList = NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
 
     if (!AsciiStriCmp (MapKey8, MappingList->Key)) {
-      ReadWriteCliData.Ctrlr    = MappingList->Ctrlr;
-      ReadWriteCliData.Ioqpair  = MappingList->Ioqpair;
+      ReadWriteCliData.Ctrlr    = (VOID *) MappingList->Ctrlr;
+      ReadWriteCliData.Ioqpair  = (VOID *) MappingList->Ioqpair;
       ReadWriteCliData.Nsid     = MappingList->Nsid;
       Flag = TRUE;
       break;
@@ -453,7 +463,7 @@ NvmeOfCliReadData ()
     if (ReadWriteCliData.Blockcount == BlockCounter) {
       break;
     }
-    Status = NvmeofPassThroughProtocol->NvmeOfCliRead (ReadWriteCliData);
+    Status = NvmeofPassThroughProtocol->Read (NvmeofPassThroughProtocol, &ReadWriteCliData);
     if (EFI_ERROR (Status)) {
       break;
     } else {
@@ -508,7 +518,10 @@ NvmeOfCliWriteData ()
 	  break;
 	}
 	ReadWriteCliData.Datasize = (UINT64)*Size;
-	Status = NvmeofPassThroughProtocol->NvmeOfCliWrite (ReadWriteCliData);
+	Status = NvmeofPassThroughProtocol->Write (
+	                                      NvmeofPassThroughProtocol,
+	                                      &ReadWriteCliData
+	                                      );
 	if (EFI_ERROR (Status)) {
 	  break;
 	} else {
@@ -1078,13 +1091,13 @@ ShellAppMain (UINTN Argc, CHAR16 **Argv)
 
   if (!StrCmp (Argv[1], L"list")) {
     if (Argc == 2) {      
-       NvmeofPassThroughProtocol->NvmeOfCliList ();
+       NvmeofPassThroughProtocol->List (NvmeofPassThroughProtocol);
     } else {
       PrintUsageList ();
     }
   } else if (!StrCmp (Argv[1], L"listattempt")) {
      if (Argc == 2) {
-        NvmeofPassThroughProtocol->NvmeOfCliListConnect ();
+        NvmeofPassThroughProtocol->ListConnect (NvmeofPassThroughProtocol);
      }
      else {
        PrintUsageListConnect ();
@@ -1158,7 +1171,11 @@ ShellAppMain (UINTN Argc, CHAR16 **Argv)
        if (EFI_ERROR (Status)) {
          Print(L"Device not found\n");
        } else {
-         IntStatus = NvmeofPassThroughProtocol->NvmeOfCliReset (gctrlr,Argv);
+         IntStatus = NvmeofPassThroughProtocol->Reset (
+                                                  NvmeofPassThroughProtocol,
+                                                  (VOID *) gctrlr,
+                                                  Argv
+                                                  );
          if (IntStatus == 0) {
            Print (L"Reset has been done successfully\n");
          }
@@ -1176,11 +1193,14 @@ ShellAppMain (UINTN Argc, CHAR16 **Argv)
         Flag = FALSE;
         Flag = NvmeOfCliIsConnected ();
         if (!Flag) {
-          Status = NvmeofPassThroughProtocol->Connect (ConnectCommandCliData);
+          Status = NvmeofPassThroughProtocol->Connect (
+                                                NvmeofPassThroughProtocol,
+                                                &ConnectCommandCliData
+                                                );
           if (EFI_ERROR (Status)) {
             Print (L"Error occured while connect\n");
           } else {
-            NvmeofPassThroughProtocol->NvmeOfCliList ();
+            NvmeofPassThroughProtocol->List (NvmeofPassThroughProtocol);
           }
         } else {
           Print (L"The device is already connected\n");
@@ -1195,8 +1215,12 @@ ShellAppMain (UINTN Argc, CHAR16 **Argv)
         if (EFI_ERROR (Status)) {
           Print(L"Device not found\n");
         } else {
-          DisconnectData.Ctrlr = gctrlr;
-          NvmeofPassThroughProtocol->NvmeOfCliDisconnect (DisconnectData, Argv);
+          DisconnectData.Ctrlr = (VOID *) gctrlr;
+          NvmeofPassThroughProtocol->Disconnect (
+                                       NvmeofPassThroughProtocol,
+                                       &DisconnectData,
+                                       Argv
+                                       );
         }
     } else {
         PrintUsageDisconnect ();
@@ -1212,8 +1236,11 @@ ShellAppMain (UINTN Argc, CHAR16 **Argv)
             Print (L"Device not found\n");
           } else {
             IdentifyData.NsId = gNsId;
-            IdentifyData.Ctrlr = gctrlr;
-            IdentifyData = NvmeofPassThroughProtocol->NvmeOfCliIdentify (IdentifyData);
+            IdentifyData.Ctrlr = (VOID *) gctrlr;
+            IdentifyData = NvmeofPassThroughProtocol->Identify (
+                                                        NvmeofPassThroughProtocol,
+                                                        &IdentifyData
+                                                        );
           }
         }
       } else {
@@ -1222,7 +1249,7 @@ ShellAppMain (UINTN Argc, CHAR16 **Argv)
   } else if (!StrCmp (Argv[1], L"version")) {
       if (Argc == 2) {
         UINTN Version;
-        Version = NvmeofPassThroughProtocol->NvmeOfCliVersion ();
+        Version = NvmeofPassThroughProtocol->Version (NvmeofPassThroughProtocol);
         Print (L"NVMeOF Driver Version : %d\n", Version);
         Print (L"NVMeOF Cli Version : %d\n", NVMEOF_CLI_VERSION);
       } else {

@@ -694,7 +694,7 @@ BmGetNvmeofDescription(
   EFI_DEVICE_PATH_PROTOCOL     *DevicePath;
   CHAR16                       *Description;
   CHAR16                       DiskDesc[256];
-  NVMEOF_PASSTHROUGH_PROTOCOL  *Bm;
+  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *Bm;
   EFI_DEVICE_PATH_PROTOCOL     *Node;
   BOOLEAN                      Found = FALSE;
 
@@ -727,7 +727,7 @@ BmGetNvmeofDescription(
     return NULL;
   }
 
-  Bm->GetBootDesc (Handle, DiskDesc);
+  Bm->GetBootDesc (Bm, Handle, DiskDesc);
 
   Description = AllocateZeroPool (sizeof (DiskDesc));
   if (Description != NULL) {
