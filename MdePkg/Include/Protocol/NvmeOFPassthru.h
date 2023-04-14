@@ -41,6 +41,7 @@ typedef struct _NVMEOF_CONNECT_COMMAND {
 typedef struct _NVMEOF_CLI_CTRL_MAPPING {
   VOID                     *Ctrlr;
   VOID                     *Ioqpair;
+  VOID                     *Private;
   CHAR8                    Key[KEY_SIZE];
   UINTN                    Nsid;
   UINT16                   Cntliduser;
