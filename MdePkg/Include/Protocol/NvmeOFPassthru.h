@@ -17,6 +17,11 @@
 #define ADDR_SIZE                 40
 #define KEY_SIZE                  20
 
+///
+/// Forward declaration for EDKII_NVMEOF_PASSTHRU_PROTOCOL
+///
+typedef struct _EDKII_NVMEOF_PASSTHRU_PROTOCOL EDKII_NVMEOF_PASSTHRU_PROTOCOL;
+
 typedef struct _NVMEOF_CONNECT_COMMAND {
   CHAR8                    Transport[NVMEOF_CLI_MAX_SIZE]; //Transport type
   CHAR8                    Nqn[NVMEOF_CLI_MAX_SIZE];//NVMe Qualified Name
@@ -51,21 +56,21 @@ typedef struct _NVMEOF_READ_WRITE_DATA {
   UINT32                   Blockcount;
   UINT64                   Datasize;
   CHAR16                   *Data;
-  struct spdk_nvme_ctrlr   *Ctrlr;
-  struct spdk_nvme_qpair   *Ioqpair;
+  VOID                     *Ctrlr;
+  VOID                     *Ioqpair;
   UINTN                    Nsid;
   UINTN                    FileSize;
   VOID                     *Payload;
 } NVMEOF_READ_WRITE_DATA;
 
 typedef struct _NVMEOF_CLI_IDENTIFY {
-  struct spdk_nvme_ctrlr             *Ctrlr;
-  const struct spdk_nvme_ctrlr_data  *Cdata;
+  VOID                               *Ctrlr;
+  CONST VOID                         *Cdata;
   UINTN                              NsId;
 } NVMEOF_CLI_IDENTIFY;
 
 typedef struct _NVMEOF_CLI_DISCONNECT {
-  struct spdk_nvme_ctrlr   *Ctrlr;
+  VOID                     *Ctrlr;
   CHAR8                    Devicekey[KEY_SIZE];
 } NVMEOF_CLI_DISCONNECT;
 
@@ -76,19 +81,207 @@ typedef struct _NVMEOF_READ_WRITE_DATA_IN_BLOCK {
   UINT64 Pattern;
 } NVMEOF_READ_WRITE_DATA_IN_BLOCK;
 
-typedef struct _NVMEOF_PASSTHROUGH_PROTOCOL {
-  EFI_STATUS(EFIAPI *Connect)(NVMEOF_CONNECT_COMMAND);
-  EFI_STATUS(EFIAPI *NvmeOfCliRead)(NVMEOF_READ_WRITE_DATA);
-  EFI_STATUS(EFIAPI *NvmeOfCliWrite)(NVMEOF_READ_WRITE_DATA);
-  NVMEOF_CLI_IDENTIFY(EFIAPI *NvmeOfCliIdentify)(NVMEOF_CLI_IDENTIFY);
-  VOID(EFIAPI *NvmeOfCliDisconnect)(NVMEOF_CLI_DISCONNECT, CHAR16 **);
-  UINT8(EFIAPI *NvmeOfCliReset)(struct spdk_nvme_ctrlr *, CHAR16 **);
-  VOID(EFIAPI *NvmeOfCliList)();
-  VOID(EFIAPI *NvmeOfCliListConnect)();
-  UINTN(EFIAPI *NvmeOfCliVersion)();
-  NVMEOF_CLI_CTRL_MAPPING **CliCtrlMap;
-  EFI_STATUS(EFIAPI *GetBootDesc)(EFI_HANDLE, CHAR16 *);
-} NVMEOF_PASSTHROUGH_PROTOCOL;
+/**
+  This function is used to establish connection to the NVMe-oF Target device.
+
+  @param[in]    This              Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+  @param[in]    ConnectData       Pointer to the NVMEOF_CONNECT_COMMAND structure containing
+                                  information required to connect NVMe-oF Target.
+
+  @retval EFI_SUCCESS            Connected successfully.
+  @retval EFI_OUT_OF_RESOURCES   Out of Resources.
+  @retval EFI_NOT_FOUND          Resource Not Found.
+  @retval EFI_INVALID_PARAMETER  Invalid Parameter.
+
+**/
+typedef
+EFI_STATUS
+(EFIAPI *EDKII_NVMEOF_PASSTHRU_CONNECT)(
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This,
+  IN  NVMEOF_CONNECT_COMMAND          *ConnectData
+  );
+
+/**
+  This function is used to read one block of data from the NVMe-oF target device.
+
+  @param[in]    This      Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+  @param[in]    ReadData  Pointer to the NVMEOF_READ_WRITE_DATA structure.
+
+  @retval EFI_SUCCESS            Data successfully read from the device.
+  @retval EFI_INVALID_PARAMETER  Invalid parameter.
+  @retval EFI_DEVICE_ERROR       Error reading from device.
+
+**/
+typedef
+EFI_STATUS
+(EFIAPI *EDKII_NVMEOF_PASSTHRU_READ)(
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This,
+  IN  NVMEOF_READ_WRITE_DATA          *ReadData
+  );
+
+/**
+  This function is used to write one block of data to the NVMe-oF target device.
+
+  @param[in]    This       Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+  @param[in]    WriteData  Pointer to the NVMEOF_READ_WRITE_DATA structure.
+
+  @retval EFI_SUCCESS            Data are written into the buffer.
+  @retval EFI_INVALID_PARAMETER  Invalid parameter.
+  @retval EFI_DEVICE_ERROR       Fail to write all the data.
+
+**/
+typedef
+EFI_STATUS
+(EFIAPI *EDKII_NVMEOF_PASSTHRU_WRITE)(
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This,
+  IN  NVMEOF_READ_WRITE_DATA          *WriteData
+  );
+
+/**
+  This function is used to print the target controller and namespace information by
+  sending NVMe identify command.
+
+  @param[in]    This          Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+  @param[in]    IdentifyData  Pointer to NVMEOF_CLI_IDENTIFY structure.
+
+  @return ReturnData          Pointer to NVMEOF_CLI_IDENTIFY structure that contains information
+                              retrieved from Target device.
+
+**/
+typedef
+NVMEOF_CLI_IDENTIFY
+(EFIAPI *EDKII_NVMEOF_PASSTHRU_IDENTIFY)(
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This,
+  IN  NVMEOF_CLI_IDENTIFY             *IdentifyData
+  );
+
+/**
+  This function is used to disconnect the NVMe-oF Target device.
+
+  @param[in]    This            Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+  @param[in]    DisconnectData  Pointer to the NVMEOF_CLI_DISCONNECT structure.
+  @param[in]    Key             String representing the namespace of a controller to disconnect.
+
+  @retval    None
+
+**/
+typedef
+VOID
+(EFIAPI *EDKII_NVMEOF_PASSTHRU_DISCONNECT)(
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This,
+  IN  NVMEOF_CLI_DISCONNECT           *DisconnectData,
+  IN  CHAR16                          **Key
+  );
+
+/**
+  This function is used to reset the target controller.
+
+  @param[in]    This    Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+  @param[in]    Ctrlr   Pointer to Abstract the SPDK structure (struct spdk_nvme_ctrlr).
+  @param[in]    Key     String representing the namespace of a controller to reset.
+
+  @retval EFI_SUCCESS         Device reset completed.
+  @retval EFI_DEVICE_ERROR    The device is not functioning properly and could not reset.
+
+**/
+typedef
+UINT8
+(EFIAPI *EDKII_NVMEOF_PASSTHRU_RESET)(
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This,
+  IN  VOID                            *Ctrlr,
+  IN  CHAR16                          **Key
+  );
+
+/**
+  This function is used to list the namespaces of the target controller connected through
+  EDKII_NVMEOF_PASSTHRU_PROTOCOL Connect member function.
+
+  @param[in]    This    Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+
+  @retval None
+
+**/
+typedef
+VOID
+(EFIAPI *EDKII_NVMEOF_PASSTHRU_LIST)(
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This
+  );
+
+/**
+  This function is used to list the namespaces of the target controller connected through
+  NVMe-oF Driver.
+
+  @param[in]    This    Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+
+  @retval None
+
+**/
+typedef
+VOID
+(EFIAPI *EDKII_NVMEOF_PASSTHRU_LIST_CONNECT)(
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This
+  );
+
+/**
+  This function is used to get the NVMe-oF Driver Version.
+
+  @param[in]    This    Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+
+  @return    NVMe-oF Driver Version.
+
+**/
+typedef
+UINTN
+(EFIAPI *EDKII_NVMEOF_PASSTHRU_VERSION)(
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This
+  );
+
+/**
+  This function is used to get the information of target controllers.
+
+  @param[in]    This    Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+
+  @return    Address of Pointer to NVMEOF_CLI_CTRL_MAPPING structure.
+
+**/
+typedef
+NVMEOF_CLI_CTRL_MAPPING**
+(EFIAPI *EDKII_NVMEOF_PASSTHRU_GET_CTRL_MAP)(
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL  *This
+  );
+
+/**
+  This function is used to get the Target Device Description required for Boot Manager.
+
+  @param[in]     This         Pointer to the EDKII_NVMEOF_PASSTHRU_PROTOCOL instance.
+  @param[in]     Handle       Device Handle.
+  @param[out]    Description  Device Description.
+
+  @retval EFI_SUCCESS            Device Description is available.
+  @retval EFI_NOT_FOUND          Description Not Found.
+
+**/
+typedef
+EFI_STATUS
+(EFIAPI *EDKII_NVMEOF_PASSTHRU_GET_BOOT_DESC)(
+  IN  EDKII_NVMEOF_PASSTHRU_PROTOCOL   *This,
+  IN  EFI_HANDLE                       Handle,
+  OUT CHAR16                           *Description
+  );
+
+struct _EDKII_NVMEOF_PASSTHRU_PROTOCOL {
+  EDKII_NVMEOF_PASSTHRU_CONNECT             Connect;
+  EDKII_NVMEOF_PASSTHRU_READ                Read;
+  EDKII_NVMEOF_PASSTHRU_WRITE               Write;
+  EDKII_NVMEOF_PASSTHRU_IDENTIFY            Identify;
+  EDKII_NVMEOF_PASSTHRU_DISCONNECT          Disconnect;
+  EDKII_NVMEOF_PASSTHRU_RESET               Reset;
+  EDKII_NVMEOF_PASSTHRU_LIST                List;
+  EDKII_NVMEOF_PASSTHRU_LIST_CONNECT        ListConnect;
+  EDKII_NVMEOF_PASSTHRU_VERSION             Version;
+  EDKII_NVMEOF_PASSTHRU_GET_CTRL_MAP        GetCtrlMap;
+  EDKII_NVMEOF_PASSTHRU_GET_BOOT_DESC       GetBootDesc;
+};
 
 extern EFI_GUID gNvmeofPassThroughProtocolGuid;
 
