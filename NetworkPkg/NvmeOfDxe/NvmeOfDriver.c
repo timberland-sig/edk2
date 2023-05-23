@@ -784,6 +784,43 @@ NvmeOfUninstallProtocolInterface (
 }
 
 /**
+
+  This function clears NBFT data associated with NvmeOf Driver.
+
+**/
+VOID
+EFIAPI
+NvmeofClearNbftData (
+  VOID
+  )
+{
+  struct spdk_nvme_fail_trid          *FailTridInfo;
+  LIST_ENTRY                          *Entry;
+  LIST_ENTRY                          *NextEntry;
+  UINT32                              Index = 0;
+
+  // Clear list of failed connection trid info for discovered subsystems
+  NET_LIST_FOR_EACH_SAFE (Entry, NextEntry, &fail_conn) {
+    FailTridInfo = NET_LIST_USER_STRUCT (Entry, struct spdk_nvme_fail_trid, link);
+    if (FailTridInfo != NULL) {
+      FreePool (FailTridInfo);
+    }
+  }
+  // Clear failed connection trid info for discovery or IO subsystems
+  for (Index = 0; Index < gNvmeOfNbftListIndex; Index++) {
+    if (gNvmeOfNbftList[Index].FailTridInfo != NULL) {
+      FreePool (gNvmeOfNbftList[Index].FailTridInfo);
+    }
+  }
+
+  if (gNvmeOfNbftListIndex > 0) {
+    SetMem (gNvmeOfNbftList, (NID_MAX * sizeof (NVMEOF_NBFT)), 0);
+    gNvmeOfNbftListIndex = 0;
+  }
+}
+
+
+/**
   Start to manage the controller. This is the worker function for
   NvmeOfIp4(6)DriverBindingStart.
 
@@ -932,19 +969,7 @@ NvmeOfStart (
       continue;
     }
 
-    // Get the attempt config data based on configuration
-    Status = NvmeOfGetConfigData (Image, ControllerHandle, AttemptConfigData);
-    if (EFI_ERROR (Status)) {
-      DEBUG ((EFI_D_ERROR, "Error getting config data.\n"));
-      goto ON_ERROR;
-    }
 
-    Status = NvmeOfDnsMode (Image, ControllerHandle, &AttemptConfigData);
-      if (EFI_ERROR (Status)) {
-        DEBUG ((EFI_D_ERROR, "The configuration of Target address or DNS server \
-            address is invalid!\n"));
-        goto ON_ERROR;
-      }
     //
     // Create the instance private data.
     //
@@ -1009,6 +1034,20 @@ NvmeOfStart (
       }
     }
 
+    // Get the attempt config data based on configuration
+    Status = NvmeOfGetConfigData (Image, ControllerHandle, AttemptConfigData);
+    if (EFI_ERROR (Status)) {
+      DEBUG ((EFI_D_ERROR, "Error getting config data.\n"));
+      goto ON_ERROR;
+    }
+
+    Status = NvmeOfDnsMode (Image, ControllerHandle, &AttemptConfigData);
+    if (EFI_ERROR (Status)) {
+      DEBUG ((EFI_D_ERROR, "The configuration of Target address or DNS server \
+          address is invalid!\n"));
+      goto ON_ERROR;
+    }
+
     if (AttemptFound) {
       Private->Attempt = AttemptEntry;
       AsciiStrToUnicodeStrS (AttemptConfigData->SubsysConfigData.NvmeofSubsysNqn, AttemptNqn,
@@ -1016,6 +1055,7 @@ NvmeOfStart (
 
       if (!SkipAttempt) {
         Status = NvmeOfProbeControllers (Private, AttemptConfigData, IpVersion);
+        NvmeOfPublishNbft (FALSE);
         if (EFI_ERROR (Status)) {
           continue;
         } else {
@@ -1024,7 +1064,6 @@ NvmeOfStart (
             NvmeOfGetIp6NicInfo (&AttemptConfigData->SubsysConfigData, Private->TcpIo);
           }
 
-          NvmeOfPublishNbft (FALSE);
         }
       }
 
@@ -1082,6 +1121,7 @@ NvmeOfStart (
       FreePool (AttemptEntry);
     }
     gAttemtsAlreadyRead = FALSE;
+    NvmeofClearNbftData ();
   }
 
   if (Private == NULL) {
@@ -1283,10 +1323,8 @@ NvmeOfStop (
   gAttemtsAlreadyRead = FALSE;
   NqnNidMapINdex = 0;
 
-  if (gNvmeOfNbftListIndex > 0) {
-    SetMem (gNvmeOfNbftList, (NID_MAX * sizeof (NVMEOF_NBFT)), 0);
-    gNvmeOfNbftListIndex = 0;
-  }
+  // Clear Nbft realted data
+  NvmeofClearNbftData ();
 
   if (IpVersion == IP_VERSION_4) {
     ProtocolGuid = &gNvmeOfV4PrivateGuid;
@@ -2018,7 +2056,7 @@ NvmeOfDriverEntry (
   InitializeListHead (&mNicPrivate->ProcessedAttempts);
   InitializeListHead (&gCliCtrlMap->CliCtrlrList);
   InitializeListHead (&CtrlrInfo->CliCtrlrList);
-
+  InitializeListHead (&fail_conn);
   //
   // Create event for BeforeExitBootServices group.
   //
