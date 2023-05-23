@@ -242,10 +242,10 @@ NvmeOfAttachCallback (
       continue;
     }
 
-    MappingData->Ctrlr = Ctrlr;
+    MappingData->Ctrlr = (VOID *) Ctrlr;
     sprintf (Key, "nvme%dn%d", Cntliduser, ActiveNs);
     strcpy (MappingData->Key, Key);
-    MappingData->Ioqpair = Device->qpair;
+    MappingData->Ioqpair = (VOID *) Device->qpair;
     MappingData->Nsid = Device->NamespaceId;
     strcpy (MappingData->Traddr, Trid->traddr);
     strcpy (MappingData->Subnqn, Trid->subnqn);

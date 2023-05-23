@@ -43,7 +43,7 @@ EFI_GUID  gNvmeOfV4PrivateGuid = NVMEOF_V4_PRIVATE_GUID;
 EFI_GUID  gNvmeOfV6PrivateGuid = NVMEOF_V6_PRIVATE_GUID;
 
 extern EFI_GUID gNvmeofPassThroughProtocolGuid;
-extern NVMEOF_PASSTHROUGH_PROTOCOL gNvmeofPassThroughInstance;
+extern EDKII_NVMEOF_PASSTHRU_PROTOCOL gNvmeofPassThroughInstance;
 extern EFI_HANDLE  mImageHandler;
 extern GLOBAL_REMOVE_IF_UNREFERENCED EFI_UNICODE_STRING_TABLE  *gNvmeOfControllerNameTable;
 extern VOID EFIAPI NvmeOfCliCleanup ();
