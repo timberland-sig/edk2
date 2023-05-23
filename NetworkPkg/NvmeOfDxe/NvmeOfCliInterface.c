@@ -90,20 +90,28 @@ NvmeOfCliDeleteMapEntries (
   )
 {
   LIST_ENTRY               *Entry;
+  LIST_ENTRY               *NextEntryProcessed = NULL;
   NVMEOF_CLI_CTRL_MAPPING  *MappingList;
   BOOLEAN                  Flag = FALSE;
+  VOID                     *Private = NULL;
 
-  NET_LIST_FOR_EACH (Entry, &gCliCtrlMap->CliCtrlrList) {
+  NET_LIST_FOR_EACH_SAFE (Entry, NextEntryProcessed, &gCliCtrlMap->CliCtrlrList) {
     MappingList = NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
     if (MappingList->Ctrlr == Ctrlr) {
+      if (MappingList->Private != Private) {
+        Private = MappingList->Private;
+        FreePool (((NVMEOF_DRIVER_DATA *)MappingList->Private)->Attempt);
+        FreePool (MappingList->Private);
+      }
       RemoveEntryList (&MappingList->CliCtrlrList);
+      FreePool (MappingList);
       Flag = TRUE;
     }
   }
   if (Flag == FALSE) {
     DEBUG ((EFI_D_ERROR, "NvmeOfCliDeleteMapKey: Error in removing MapKey\n"));
     Print (L"Error in removing device key\n");
-  }  
+  }
 }
 
 /**
@@ -1020,6 +1028,10 @@ NvmeOfCliProbeCallback (
   )
 {
   EFI_GUID  NvmeOfCliUuid = NVMEOF_CLI_UUID;
+  NVMEOF_DRIVER_DATA            *Private;
+  struct spdk_edk_sock_ctx      *Context;
+  NVMEOF_ATTEMPT_CONFIG_NVDATA  *AttemptData;
+
   DEBUG ((DEBUG_INFO, "Passthrough, Attaching to %a\n", Trid->traddr));
   //For CLI use Zero KATO
   Opts->keep_alive_timeout_ms = 0;
@@ -1029,6 +1041,36 @@ NvmeOfCliProbeCallback (
       CopyMem (Opts->hostnqn, ProbeconnectData->Hostnqn, sizeof (ProbeconnectData->Hostnqn));
     }
   }
+
+  // Fill socket context
+  Private     = (NVMEOF_DRIVER_DATA*)CallbackCtx;
+  AttemptData = &Private->Attempt->Data;
+  Context     = &Private->Attempt->SocketContext;
+
+  Context->Controller = Private->Controller;
+  Context->IsIp6      = AttemptData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP6;
+
+  if (!Context->IsIp6) {
+    CopyMem (
+      &Context->StationIp.v4,
+      &AttemptData->SubsysConfigData.NvmeofSubsysHostIP,
+      sizeof (EFI_IPv4_ADDRESS)
+      );
+
+    CopyMem (
+      &Context->SubnetMask.v4,
+      &AttemptData->SubsysConfigData.NvmeofSubsysHostSubnetMask,
+      sizeof (EFI_IPv4_ADDRESS)
+      );
+
+    CopyMem (
+      &Context->GatewayIp.v4,
+      &AttemptData->SubsysConfigData.NvmeofSubsysHostGateway.v4,
+      sizeof (EFI_IPv4_ADDRESS)
+      );
+  }
+
+  Opts->sock_ctx = Context;
   return TRUE;
 }
 
@@ -1117,7 +1159,8 @@ NvmeOfAttachCliCallback (
     MappingData->Nsid = Device->NamespaceId;
     strcpy (MappingData->Traddr, Trid->traddr);
     strcpy (MappingData->Subnqn, Trid->subnqn);
-    MappingData->Cntliduser = Cntliduser;    
+    MappingData->Cntliduser = Cntliduser;
+    MappingData->Private = Private;
     ActiveNs++;
     InsertTailList (&gCliCtrlMap->CliCtrlrList, &MappingData->CliCtrlrList);
 
@@ -1250,34 +1293,43 @@ InstallControllerHandler (
   CHAR16                            AttemptMacString[NVMEOF_MAX_MAC_STRING_LEN];
   BOOLEAN                           AttemptFound = FALSE;
   EFI_GUID                          *TcpServiceBindingGuid;
-  NVMEOF_ATTEMPT_CONFIG_NVDATA      AttemptData;
+  NVMEOF_ATTEMPT_CONFIG_NVDATA      *AttemptData;
   CHAR8                             *EndPointer = NULL;
+  NVMEOF_ATTEMPT_ENTRY              *AttemptEntry;
+
+  AttemptEntry = AllocateZeroPool (sizeof (NVMEOF_ATTEMPT_ENTRY));
+  if (AttemptEntry == NULL) {
+    return EFI_OUT_OF_RESOURCES;
+  }
+
+  AttemptData = &AttemptEntry->Data;
 
   //Set Attempt data
-  CopyMem (AttemptData.AttemptName, "Attempt 1", sizeof(AttemptData.AttemptName));
-  snprintf (AttemptData.MacString, NVMEOF_MAX_MAC_STRING_LEN, "%s", ConnectData->Mac);
-  CopyMem (AttemptData.SubsysConfigData.NvmeofSubsysNqn, ConnectData->Nqn, NVMEOF_CLI_MAX_SIZE);
-  AttemptData.SubsysConfigData.NvmeofIpMode = ConnectData->IpMode;
-  AttemptData.SubsysConfigData.NvmeofDnsMode = FALSE;
+  CopyMem (AttemptData->AttemptName, "Attempt 1", sizeof(AttemptData->AttemptName));
+  snprintf (AttemptData->MacString, NVMEOF_MAX_MAC_STRING_LEN, "%s", ConnectData->Mac);
+  CopyMem (AttemptData->SubsysConfigData.NvmeofSubsysNqn, ConnectData->Nqn, NVMEOF_CLI_MAX_SIZE);
+  AttemptData->SubsysConfigData.NvmeofIpMode = ConnectData->IpMode;
+  AttemptData->SubsysConfigData.NvmeofDnsMode = FALSE;
   if (ConnectData->IpMode == 0) {
-    AsciiStrToIpv4Address (ConnectData->LocalIp, &EndPointer, &AttemptData.SubsysConfigData.NvmeofSubsysHostIP.v4, NULL);
-    AsciiStrToIpv4Address (ConnectData->Traddr, &EndPointer, &AttemptData.SubsysConfigData.NvmeofSubSystemIp.v4, NULL);
-    AsciiStrToIpv4Address (ConnectData->SubnetMask, &EndPointer, &AttemptData.SubsysConfigData.NvmeofSubsysHostSubnetMask.v4, NULL);
-    AsciiStrToIpv4Address (ConnectData->Gateway, &EndPointer, &AttemptData.SubsysConfigData.NvmeofSubsysHostGateway.v4, NULL);
+    AsciiStrToIpv4Address (ConnectData->LocalIp, &EndPointer, &AttemptData->SubsysConfigData.NvmeofSubsysHostIP.v4, NULL);
+    AsciiStrToIpv4Address (ConnectData->Traddr, &EndPointer, &AttemptData->SubsysConfigData.NvmeofSubSystemIp.v4, NULL);
+    AsciiStrToIpv4Address (ConnectData->SubnetMask, &EndPointer, &AttemptData->SubsysConfigData.NvmeofSubsysHostSubnetMask.v4, NULL);
+    AsciiStrToIpv4Address (ConnectData->Gateway, &EndPointer, &AttemptData->SubsysConfigData.NvmeofSubsysHostGateway.v4, NULL);
     IpVersion = IP_VERSION_4;
   } else if (ConnectData->IpMode == 1) {
-    AsciiStrToIpv6Address (ConnectData->LocalIp, &EndPointer, &AttemptData.SubsysConfigData.NvmeofSubsysHostIP.v6, NULL);
-    AsciiStrToIpv6Address (ConnectData->Traddr, &EndPointer, &AttemptData.SubsysConfigData.NvmeofSubSystemIp.v6, NULL);
+    AsciiStrToIpv6Address (ConnectData->LocalIp, &EndPointer, &AttemptData->SubsysConfigData.NvmeofSubsysHostIP.v6, NULL);
+    AsciiStrToIpv6Address (ConnectData->Traddr, &EndPointer, &AttemptData->SubsysConfigData.NvmeofSubSystemIp.v6, NULL);
     IpVersion = IP_VERSION_6;
   } else {
+    FreePool (AttemptEntry);
     Status = EFI_INVALID_PARAMETER;
     Print (L"Invalid IpMode\n");
     return Status;
   }
 
   ProbeconnectData = ConnectData;
-  AttemptData.SubsysConfigData.NvmeofSubsysPortId = ConnectData->Trsvcid;
-  AttemptData.SubsysConfigData.NvmeofTimeout = CONNECT_TIMEOUT;
+  AttemptData->SubsysConfigData.NvmeofSubsysPortId = ConnectData->Trsvcid;
+  AttemptData->SubsysConfigData.NvmeofTimeout = CONNECT_TIMEOUT;
   DeviceHandleCount=0;
   DeviceHandleBuffer=NULL;
   if (IpVersion == IP_VERSION_4) {
@@ -1298,6 +1350,7 @@ InstallControllerHandler (
   if (EFI_ERROR (Status)) {
     DEBUG ((EFI_D_ERROR, "Exit from protocol\n"));
     Print (L"Unable to locate TcpServiceBindingGuid protocol\n");
+    FreePool (AttemptEntry);
     return Status;
   }
   //
@@ -1310,6 +1363,7 @@ InstallControllerHandler (
     Status = NetLibGetMacAddress (DeviceHandleBuffer[Index], &MacAddr, &HwAddressSize);
     if (EFI_ERROR (Status)) {
       Print (L"Unable to get Mac address.\n");
+      FreePool (AttemptEntry);
       return Status;
     }
     //
@@ -1320,7 +1374,7 @@ InstallControllerHandler (
     NvmeOfMacAddrToStr (&MacAddr, HwAddressSize,
       VlanId, MacString);
 
-    AsciiStrToUnicodeStrS (AttemptData.MacString, AttemptMacString,
+    AsciiStrToUnicodeStrS (AttemptData->MacString, AttemptMacString,
       sizeof (AttemptMacString) / sizeof (AttemptMacString[0]));
     if (StrCmp (MacString, AttemptMacString) != 0) {
       continue;
@@ -1332,11 +1386,13 @@ InstallControllerHandler (
   if (AttemptFound == TRUE) {
     Private = NvmeOfCreateDriverData (mImageHandler, DeviceHandleBuffer[Index]);
     if (Private == NULL) {
+      FreePool (AttemptEntry);
       DEBUG ((EFI_D_ERROR, "Error allocating driver private structure .\n"));
       return EFI_OUT_OF_RESOURCES;
     }
 
-    NvmeOfCliProbeControllers (Private, &AttemptData, IpVersion);
+    Private->Attempt = AttemptEntry;
+    NvmeOfCliProbeControllers (Private, AttemptData, IpVersion);
   } else {
     Status = EFI_INVALID_PARAMETER;
     Print (L"The specified MacId is not from this system\n");
