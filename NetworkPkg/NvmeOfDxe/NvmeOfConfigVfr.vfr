@@ -1,0 +1,241 @@
+/** @file
+  VFR file used by the NVMe-oF configuration component.
+
+Copyright (c) 2023, Dell Technologies All rights reserved
+SPDX-License-Identifier: BSD-2-Clause-Patent
+
+**/
+
+#include "NvmeOfConfigNVDataStruc.h"
+
+#define EFI_NETWORK_DEVICE_CLASS  0x04
+
+formset
+  guid     = NVMEOF_CONFIG_GUID,
+  title    = STRING_TOKEN(STR_NVMEOF_CONFIG_FORM_TITLE),
+  help     = STRING_TOKEN(STR_NVMEOF_CONFIG_FORM_HELP),
+
+  varstore NVMEOF_CONFIG_IFR_NVDATA,
+    varid = CONFIGURATION_VARSTORE_ID,
+    name = NVMEOF_CONFIG_IFR_NVDATA,
+    guid = NVMEOF_CONFIG_GUID;
+
+  form formid = FORMID_MAIN_FORM,
+    title  = STRING_TOKEN(STR_NVMEOF_MAIN_FORM_TITLE);
+
+    string  varid   = NVMEOF_CONFIG_IFR_NVDATA.NvmeofHostNqn,
+            prompt  = STRING_TOKEN(STR_NVMEOF_CONFIG_HOST_NQN),
+            help    = STRING_TOKEN(STR_NVMEOF_CONFIG_HOST_NQN_HELP),
+            flags   = INTERACTIVE | RESET_REQUIRED,
+            key     = KEY_HOST_NQN,
+            minsize = NVMEOF_NAME_IFR_MIN_SIZE,
+            maxsize = NVMEOF_NAME_IFR_MAX_SIZE,
+    endstring;
+
+    subtitle text = STRING_TOKEN(STR_NULL);
+
+    string  varid   = NVMEOF_CONFIG_IFR_NVDATA.NvmeofHostId,
+            prompt  = STRING_TOKEN(STR_NVMEOF_CONFIG_HOST_ID),
+            help    = STRING_TOKEN(STR_NVMEOF_CONFIG_HOST_ID_HELP),
+            flags   = INTERACTIVE | RESET_REQUIRED,
+            key     = KEY_HOST_ID,
+            minsize = NVMEOF_NID_IFR_MIN_SIZE,
+            maxsize = NVMEOF_NID_IFR_MAX_SIZE,
+    endstring;
+
+    subtitle text = STRING_TOKEN(STR_NULL);
+
+    label ATTEMPT_ENTRY_LABEL;
+    label LABEL_END;
+
+    subtitle text = STRING_TOKEN(STR_NULL);
+
+  endform;
+
+  form formid = FORMID_ATTEMPT_FORM,
+    title  = STRING_TOKEN(STR_NVMEOF_ATTEMPT_FORM_TITLE);
+
+    string  varid   = NVMEOF_CONFIG_IFR_NVDATA.AttemptName,
+            prompt  = STRING_TOKEN(STR_NVMEOF_ATTEMPT_NAME),
+            help    = STRING_TOKEN(STR_NVMEOF_ATTEMPT_NAME_HELP),
+            flags   = READ_ONLY,
+            key     = KEY_ATTEMPT_NAME,
+            minsize = 0,
+            maxsize = ATTEMPT_NAME_SIZE,
+    endstring;
+
+    subtitle text = STRING_TOKEN(STR_NULL);
+
+    oneof varid  = NVMEOF_CONFIG_IFR_NVDATA.Enabled,
+          prompt = STRING_TOKEN(STR_NVMEOF_MODE_PROMPT),
+          help   = STRING_TOKEN(STR_NVMEOF_MODE_HELP),
+          option text = STRING_TOKEN(STR_NVMEOF_MODE_DISABLED), value = NVMEOF_ATTEMPT_DISABLED, flags = DEFAULT;
+          option text = STRING_TOKEN(STR_NVMEOF_MODE_ENABLED),  value = NVMEOF_ATTEMPT_ENABLED,  flags = 0;
+    endoneof;
+
+    subtitle text = STRING_TOKEN(STR_NULL);
+
+    goto FORMID_MAC_FORM,
+         prompt = STRING_TOKEN(STR_SELECT_MAC),
+         help   = STRING_TOKEN(STR_SELECT_MAC_HELP),
+         flags  = INTERACTIVE,
+         key    = KEY_SELECT_MAC;
+
+    string  varid   = NVMEOF_CONFIG_IFR_NVDATA.NvmeofSubsysMacString,
+            prompt  = STRING_TOKEN(STR_NVMEOF_MAC_STRING),
+            help    = STRING_TOKEN(STR_NULL),
+            flags   = READ_ONLY,
+            minsize = 0,
+            maxsize = NVMEOF_MAX_MAC_STRING_LEN,
+    endstring;
+
+    subtitle text = STRING_TOKEN(STR_NULL);
+
+    oneof varid  = NVMEOF_CONFIG_IFR_NVDATA.IpMode,
+          questionid = KEY_IP_MODE,
+          prompt = STRING_TOKEN(STR_IP_MODE_PROMPT),
+          help   = STRING_TOKEN(STR_IP_MODE_HELP),
+          option text = STRING_TOKEN(STR_IP_MODE_IP4),        value = IP_MODE_IP4,        flags = INTERACTIVE;
+          option text = STRING_TOKEN(STR_IP_MODE_IP6),        value = IP_MODE_IP6,        flags = INTERACTIVE;
+          option text = STRING_TOKEN(STR_IP_MODE_AUTOCONFIG), value = IP_MODE_AUTOCONFIG, flags = INTERACTIVE;
+    endoneof;
+
+    subtitle text = STRING_TOKEN(STR_NULL);
+
+    numeric varid   = NVMEOF_CONFIG_IFR_NVDATA.ConnectRetryCount,
+            prompt  = STRING_TOKEN(STR_NVMEOF_CONFIG_RETRY),
+            help    = STRING_TOKEN(STR_NVMEOF_CONFIG_RETRY_HELP),
+            flags   = 0,
+            minimum = CONNECT_MIN_RETRY,
+            maximum = CONNECT_MAX_RETRY,
+            step    = 0,
+    endnumeric;
+
+    subtitle text = STRING_TOKEN(STR_NULL);
+
+    suppressif ideqval NVMEOF_CONFIG_IFR_NVDATA.IpMode == IP_MODE_AUTOCONFIG;
+
+    checkbox varid = NVMEOF_CONFIG_IFR_NVDATA.HostInfoDhcp,
+            prompt = STRING_TOKEN(STR_NVMEOF_ENABLE_DHCP),
+            help   = STRING_TOKEN(STR_NVMEOF_ENABLE_DHCP),
+            flags  = INTERACTIVE,
+            key    = KEY_DHCP_ENABLE,
+    endcheckbox;
+
+    suppressif ideqval NVMEOF_CONFIG_IFR_NVDATA.HostInfoDhcp == 0x01;
+    string  varid   = NVMEOF_CONFIG_IFR_NVDATA.NvmeofSubsysHostIp,
+            prompt  = STRING_TOKEN(STR_NVMEOF_LOCAL_IP_ADDRESS),
+            help    = STRING_TOKEN(STR_NVMEOF_IP_ADDRESS_HELP),
+            flags   = INTERACTIVE,
+            key     = KEY_HOST_IP,
+            minsize = IP_STR_IFR_MIN_SIZE,
+            maxsize = IP_STR_IFR_MAX_SIZE,
+    endstring;
+
+    suppressif ideqval NVMEOF_CONFIG_IFR_NVDATA.IpMode == IP_MODE_IP6;
+    string  varid   = NVMEOF_CONFIG_IFR_NVDATA.NvmeofSubsysHostSubnetMask,
+            prompt  = STRING_TOKEN(STR_NVMEOF_LOCAL_MASK),
+            help    = STRING_TOKEN(STR_NVMEOF_IP_ADDRESS_HELP),
+            flags   = INTERACTIVE,
+            key     = KEY_SUBNET_MASK,
+            minsize = IP4_STR_IFR_MIN_SIZE,
+            maxsize = IP4_STR_IFR_MAX_SIZE,
+    endstring;
+    endif;
+
+    string  varid   = NVMEOF_CONFIG_IFR_NVDATA.NvmeofSubsysHostGateway,
+            prompt  = STRING_TOKEN(STR_NVMEOF_LOCAL_GATEWAY),
+            help    = STRING_TOKEN(STR_NVMEOF_IP_ADDRESS_HELP),
+            flags   = INTERACTIVE,
+            key     = KEY_GATE_WAY,
+            minsize = IP_STR_IFR_MIN_SIZE,
+            maxsize = IP_STR_IFR_MAX_SIZE,
+    endstring;
+    endif;
+
+    suppressif ideqval NVMEOF_CONFIG_IFR_NVDATA.IpMode == IP_MODE_AUTOCONFIG;
+    subtitle text = STRING_TOKEN(STR_NULL);
+    endif;
+
+    grayoutif ideqval NVMEOF_CONFIG_IFR_NVDATA.IpMode == IP_MODE_AUTOCONFIG OR
+               ideqval NVMEOF_CONFIG_IFR_NVDATA.HostInfoDhcp == 0x00;
+
+    checkbox varid  = NVMEOF_CONFIG_IFR_NVDATA.NvmeofSubsysInfoDhcp,
+             prompt = STRING_TOKEN(STR_NVMEOF_ENABLE_DHCP_ON_SUBSYS),
+             help   = STRING_TOKEN(STR_NVMEOF_ENABLE_DHCP_ON_SUBSYS),
+             flags  = 0,
+    endcheckbox;
+    endif;
+
+    suppressif ideqval NVMEOF_CONFIG_IFR_NVDATA.IpMode == IP_MODE_AUTOCONFIG OR
+               ideqval NVMEOF_CONFIG_IFR_NVDATA.NvmeofSubsysInfoDhcp == 0x01;
+
+    string  varid   = NVMEOF_CONFIG_IFR_NVDATA.NvmeofSubsysNqn,
+            prompt  = STRING_TOKEN(STR_NVMEOF_SUBSYS_NQN),
+            help    = STRING_TOKEN(STR_NVMEOF_SUBSYS_NQN_HELP),
+            flags   = INTERACTIVE,
+            key     = KEY_SUBSYS_NQN,
+            minsize = NVMEOF_NAME_IFR_MIN_SIZE,
+            maxsize = NVMEOF_NAME_IFR_MAX_SIZE,
+    endstring;
+
+    string  varid   = NVMEOF_CONFIG_IFR_NVDATA.NvmeofSubsysIp,
+            prompt  = STRING_TOKEN(STR_NVMEOF_SUBSYS_ADDRESS),
+            help    = STRING_TOKEN(STR_NVMEOF_SUBSYS_ADDRESS_HELP),
+            flags   = INTERACTIVE,
+            key     = KEY_SUBSYS_IP,
+            minsize = NVMEOF_SUBSYS_URI_MIN_SIZE,
+            maxsize = NVMEOF_SUBSYS_URI_MAX_SIZE,
+    endstring;
+
+    numeric varid   = NVMEOF_CONFIG_IFR_NVDATA.NvmeofTargetPort,
+            prompt  = STRING_TOKEN(STR_NVMEOF_SUBSYS_PORT),
+            help    = STRING_TOKEN(STR_NVMEOF_SUBSYS_PORT),
+            flags   = 0,
+            minimum = SUBSYS_PORT_MIN_NUM,
+            maximum = SUBSYS_PORT_MAX_NUM,
+            step    = 0,
+            default = SUBSYS_PORT_DEFAULT,
+    endnumeric;
+    endif;
+
+    subtitle text = STRING_TOKEN(STR_NULL);
+
+    string varid   = NVMEOF_CONFIG_IFR_NVDATA.NvmeofSubsysNid,
+            prompt  = STRING_TOKEN(STR_NVMEOF_SUBSYS_NID),
+            help    = STRING_TOKEN(STR_NVMEOF_SUBSYS_NID_HELP),
+            flags   = INTERACTIVE,
+            key     = KEY_SUBSYS_NID,
+            minsize = NVMEOF_NID_IFR_MIN_SIZE,
+            maxsize = NVMEOF_NID_IFR_MAX_SIZE,
+    endstring;
+
+    endif;
+
+    suppressif ideqval NVMEOF_CONFIG_IFR_NVDATA.IpMode == IP_MODE_AUTOCONFIG;
+    subtitle text = STRING_TOKEN(STR_NULL);
+    endif;
+
+    text
+      help   = STRING_TOKEN (STR_SAVE_CHANGES_HELP),
+      text   = STRING_TOKEN (STR_SAVE_CHANGES),
+      flags  = INTERACTIVE | RESET_REQUIRED,
+      key    = KEY_SAVE_ATTEMPT_CONFIG;
+
+    goto FORMID_MAIN_FORM,
+    prompt = STRING_TOKEN (STR_RETURN_MAIN_FORM),
+    help   = STRING_TOKEN (STR_RETURN_MAIN_FORM),
+    flags  = 0;
+
+  endform;
+
+  form formid = FORMID_MAC_FORM,
+    title          = STRING_TOKEN(STR_NVMEOF_MAC_FORM_TITLE);
+    subtitle text  = STRING_TOKEN(STR_NVMEOF_MAC_FORM_TITLE);
+
+    label MAC_ENTRY_LABEL;
+    label LABEL_END;
+
+  endform;
+
+endformset;
