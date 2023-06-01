@@ -37,6 +37,11 @@
   NvmeOfImpl.h
   NvmeOfDriver.h
   ComponentName.c
+  NvmeOfConfig.c
+  NvmeOfConfig.h
+  NvmeOfConfigNVDataStruc.h
+  NvmeOfConfigStrings.uni
+  NvmeOfConfigVfr.vfr
   NvmeOfDns.c
   NvmeOfDns.h
   NvmeOfSpdk.c
@@ -63,6 +68,7 @@
   BaseLib
   DebugLib
   DevicePathLib
+  HiiLib
   MemoryAllocationLib
   NetLib
   TcpIoLib
@@ -96,6 +102,8 @@
   gEfiStorageSecurityCommandProtocolGuid        ## BY_START
   gEfiAcpiTableProtocolGuid                     ## SOMETIMES_CONSUMES
   gEdkiiNvmeofPassThruProtocolGuid              ## PRODUCES
+  gEfiHiiConfigAccessProtocolGuid               ## PRODUCES
+  gEfiNetworkInterfaceIdentifierProtocolGuid_31 ## SOMETIMES_CONSUMES
 
 [Guids]
   gNvmeOfConfigGuid
@@ -103,10 +111,13 @@
   gEfiAcpi10TableGuid
   gEfiEventExitBootServicesGuid
   gEfiEventBeforeExitBootServicesGuid
+  gEfiIfrTianoGuid                              ## SOMETIMES_PRODUCES ## UNDEFINED
+  gEfiAdapterInfoUndiIpv6SupportGuid            ## SOMETIMES_CONSUMES ## GUID
 
 [Pcd]
   gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultCreatorId        ## SOMETIMES_CONSUMES
   gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultCreatorRevision  ## SOMETIMES_CONSUMES
+  gEfiNetworkPkgTokenSpaceGuid.PcdMaxNvmeOfAttemptNumber        ## CONSUMES
 
 [BuildOptions]
 # disable warning C4201: nonstandard extension used: nameless struct/union
@@ -117,4 +128,3 @@
   MSFT:*_*_*_CC_FLAGS     = /wd4477
   MSFT:*_*_*_CC_FLAGS     = /wd4245
   MSFT:*_*_*_CC_FLAGS     = /wd4133
-
