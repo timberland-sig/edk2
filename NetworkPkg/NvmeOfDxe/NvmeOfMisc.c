@@ -1597,6 +1597,96 @@ IsUuidValid (
 }
 
 /**
+  Check an input string for valid NID format as per NVMe Base Specification
+  revision 2.0b, section 5.17.2.3 and NVMe Boot Specification revision 1.0,
+  section 1.5.9.
+
+  Case 1: NVMe EUI-64 string format
+  Case 2: NVMe NGUID string format
+  Case 3: NVMe UUID string format
+
+  @param[in]    Nid  The string to check for NID validity.
+
+  @retval TRUE             NID string is valid.
+  @retval FALSE            NID string is invalid.
+
+**/
+BOOLEAN
+NvmeOfIsNidValid (
+  IN CHAR8  *Nid
+  )
+{
+  UINT8  Index;
+  UINT8  NidLen;
+
+  NidLen = AsciiStrnLenS (Nid, NVMEOF_NID_MAX_LEN);
+
+  if (!AsciiStrnCmp (Nid, NVMEOF_NID_EUI64_STR, sizeof (NVMEOF_NID_EUI64_STR) - 1)) {
+    //
+    // NID type #1 (EUI64)
+    //
+    if (NidLen != NVMEOF_NID_EUI64_LEN) {
+      return FALSE;
+    }
+
+    for (Index = sizeof (NVMEOF_NID_EUI64_STR) - 1; Index < NidLen; Index++) {
+      //
+      // String representation of the 8 byte IEEE RA formatted EUI-64
+      //
+      if (Index % 3 == 0) {
+        if (Nid[Index] != '-') {
+          return FALSE;
+        }
+
+        continue;
+      }
+
+      if (!NET_IS_HEX (Nid[Index])) {
+        return FALSE;
+      }
+    }
+
+    return TRUE;
+  }
+
+  if (!AsciiStrnCmp (Nid, NVMEOF_NID_GUID_STR, sizeof (NVMEOF_NID_GUID_STR) - 1)) {
+    //
+    // NID format type 2 (NGUID)
+    //
+    if (NidLen != NVMEOF_NID_GUID_LEN) {
+      return FALSE;
+    }
+
+    for (Index = sizeof (NVMEOF_NID_GUID_STR) - 1; Index < NidLen; Index++) {
+      if ((Index == 27) || (Index == 34)) {
+        if (Nid[Index] != '-') {
+          return FALSE;
+        }
+
+          continue;
+        }
+
+        if (!NET_IS_HEX (Nid[Index])) {
+          return FALSE;
+        }
+      }
+
+      return TRUE;
+    }
+
+  if (!AsciiStrnCmp (Nid, NVMEOF_NID_UUID_STR, sizeof (NVMEOF_NID_UUID_STR) - 1) &&
+      (IsUuidValid (&Nid[sizeof (NVMEOF_NID_UUID_STR) - 1])))
+  {
+    //
+    // NID format type 3 (UUID)
+    //
+      return TRUE;
+  }
+
+  return FALSE;
+}
+
+/**
   Function to check if NIDs are valid and equal
 
   @param[in]  Nid1           NID1 to be checked
@@ -1824,4 +1914,79 @@ NvmeOfBeforeEBS (
   // DXE stage to RT stage.
   //
   gDriverInRuntime = TRUE;
+}
+
+/**
+  Create and initialize the NVMe-oF Global data with default values.
+
+  If the NV variable 'NvmeofGlobalData' is not found, data will be created and
+  default parameters assigned.
+  If the NV data is found it will be kept to ensure persistence of user-configured
+  data (HostNQN, HostID). Default parameters will still be set to maintain
+  consistency with the driver or apply updated values (such as driver version).
+
+  @retval EFI_SUCCESS             The Global data has been created successfully.
+  @retval EFI_UNSUPPORTED         Located existing data with unexpected size.
+  @retval Others                  Failed to create Global data.
+
+**/
+EFI_STATUS
+NvmeOfInitializeGlobalNvData (
+  VOID
+  )
+{
+  NVMEOF_GLOBAL_DATA  *NvmeOfGlobalData;
+  EFI_STATUS          Status = EFI_SUCCESS;
+  UINTN               Size;
+
+  NvmeOfGlobalData = NvmeOfGetVariableAndSize (
+                       L"NvmeofGlobalData",
+                       &gNvmeOfConfigGuid,
+                       &Size
+                       );
+  if ((Size != sizeof (NVMEOF_GLOBAL_DATA)) && (Size != 0)) {
+    DEBUG ((
+      DEBUG_ERROR,
+      "%a: Located variable (NvmeOfGlobalData) with Guid (%d) "
+      "has unexpected data size.\n",
+      __FUNCTION__,
+      &gNvmeOfConfigGuid
+      ));
+    return EFI_UNSUPPORTED;
+  }
+
+  if ((NvmeOfGlobalData == NULL) || (Size == 0)) {
+    NvmeOfGlobalData = AllocateZeroPool (sizeof (NVMEOF_GLOBAL_DATA));
+    if (NvmeOfGlobalData == NULL) {
+      return EFI_OUT_OF_RESOURCES;
+    }
+  }
+
+  //
+  // Set defaults required by driver.
+  //
+  NvmeOfGlobalData->DriverVersion = NVMEOF_DRIVER_VERSION;
+  NvmeOfGlobalData->NvmeOfEnabled = NVMEOF_ENABLED;
+
+  Status = gRT->SetVariable (
+                  L"NvmeofGlobalData",
+                  &gNvmeOfConfigGuid,
+                  NVMEOF_CONFIG_VAR_ATTR,
+                  sizeof (*NvmeOfGlobalData),
+                  NvmeOfGlobalData
+                  );
+  if (EFI_ERROR (Status)) {
+    DEBUG ((
+      DEBUG_ERROR,
+      "%a: Failed to set variable (NvmeofGlobalData) with Guid (%g): "
+      "%r\n",
+      __FUNCTION__,
+      &gNvmeOfConfigGuid,
+      Status
+      ));
+  }
+
+  FreePool (NvmeOfGlobalData);
+
+  return Status;
 }

@@ -1741,6 +1741,14 @@ NvmeOfDriverUnload (
     }
   }
 
+  //
+  // Unload the NVMe-oF configuration form.
+  //
+  Status = NvmeOfConfigFormUnload (gNvmeOfIp4DriverBinding.DriverBindingHandle);
+  if (EFI_ERROR (Status)) {
+    goto ON_EXIT;
+  }
+
   if (gNvmeOfControllerNameTable != NULL) {
     Status = FreeUnicodeStringTable (gNvmeOfControllerNameTable);
     if (EFI_ERROR (Status)) {
@@ -1987,7 +1995,26 @@ NvmeOfDriverEntry (
     goto Error2;
   }
 
+  //
+  // Initialize the configuration form of NVMe-oF.
+  //
+  Status = NvmeOfConfigFormInit (gNvmeOfIp4DriverBinding.DriverBindingHandle);
+  if (EFI_ERROR (Status)) {
+    goto Error2;
+  }
+
+  //
+  // Initialize the Global data and assign required configuration values.
+  //
+  Status = NvmeOfInitializeGlobalNvData ();
+  if (EFI_ERROR (Status)) {
+    goto Error3;
+  }
+
   return Status;
+
+Error3:
+  NvmeOfConfigFormUnload (gNvmeOfIp4DriverBinding.DriverBindingHandle);
 
 Error2:
  EfiLibUninstallDriverBindingComponentName2 (

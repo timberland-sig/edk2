@@ -465,6 +465,20 @@ IsUuidValid (
   );
 
 /**
+  Function to check if input NID string is valid.
+
+  @param[in]    Nid  The string to check for NID validity.
+
+  @retval TRUE             NID string is valid.
+  @retval FALSE            NID string is invalid.
+
+**/
+BOOLEAN
+NvmeOfIsNidValid (
+  IN CHAR8  *Nid
+  );
+
+/**
   Function to check if NIDs are valid and equal
 
   @param[in]  Nid1           NID1 to be checked
@@ -545,6 +559,18 @@ EFIAPI
 NvmeOfBeforeEBS (
   IN EFI_EVENT  Event,
   IN VOID       *Context
+  );
+
+/**
+  Create and initialize the NVMe-oF Global data with default values.
+
+  @retval EFI_SUCCESS             The Global data has been created successfully.
+  @retval Others                  Failed to create Global data.
+
+**/
+EFI_STATUS
+NvmeOfInitializeGlobalNvData (
+  IN   VOID
   );
 
 #endif

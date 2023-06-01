@@ -58,6 +58,9 @@
 #include "NvmeOfDhcp.h"
 #include "NvmeOfDhcp6.h"
 
+#include "NvmeOfConfigNVDataStruc.h"
+#include "NvmeOfConfig.h"
+
 #define NVMEOF_DRIVER_DATA_SIGNATURE SIGNATURE_32 ('N', 'E', 'O', 'F')
 
 #define NVMEOF_DRIVER_DATA_FROM_IDENTIFIER(Identifier) \
