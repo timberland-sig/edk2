@@ -1,0 +1,71 @@
+// *++
+//
+// Copyright (c) 2023, Dell Technologies All rights reserved
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+// Module Name:
+//
+//   NvmeOfConfigStrings.uni
+//
+// Abstract:
+//
+//   String definitions for NVMe-oF configuration.
+//
+// Revision History:
+//
+// --*/
+
+/=#
+
+#langdef en-US "English"
+#langdef x-UEFI-ns "UefiNameSpace"
+
+#string STR_NVMEOF_CONFIG_FORM_TITLE              #language en-US "NVMe-oF Configuration"
+#string STR_NVMEOF_CONFIG_FORM_HELP               #language en-US "Configure the NVMe-oF parameters."
+#string STR_NVMEOF_MAIN_FORM_TITLE                #language en-US "NVMe-oF Configuration"
+#string STR_NVMEOF_MAC_FORM_TITLE                 #language en-US "Network Device List"
+#string STR_NVMEOF_CONFIG_HOST_NQN                #language en-US "Host NQN"
+#string STR_NVMEOF_CONFIG_HOST_NQN_HELP           #language en-US "The host's NVMe Qualified Name."
+#string STR_NVMEOF_CONFIG_HOST_ID                 #language en-US "Host NID"
+#string STR_NVMEOF_CONFIG_HOST_ID_HELP            #language en-US "The host's NVM Namespace Identifier."
+#string STR_NVMEOF_CONFIG_HOST_SECURITY_PATH      #language en-US "Security Key Path"
+#string STR_NVMEOF_CONFIG_HOST_SECURITY_PATH_HELP #language en-US "The path to the host's storage security key."
+#string STR_NVMEOF_MODE_PROMPT                    #language en-US "NVM Subsystem"
+#string STR_NVMEOF_MODE_HELP                      #language en-US "Enable or Disable the current NVMe-oF attempt configuration."
+#string STR_NVMEOF_MODE_DISABLED                  #language en-US "Disabled"
+#string STR_NVMEOF_MODE_ENABLED                   #language en-US "Enabled"
+#string STR_NULL                                  #language en-US ""
+#string STR_RETURN_MAIN_FORM                      #language en-US "Back to Previous Page"
+#string STR_SAVE_CHANGES                          #language en-US "Save Changes"
+#string STR_SAVE_CHANGES_HELP                     #language en-US "Must reboot system manually for changes to take place."
+#string STR_NVMEOF_ATTEMPT_FORM_TITLE             #language en-US "Attempt Configuration"
+#string STR_NVMEOF_ATTEMPT_NAME                   #language en-US "NVMe-oF Attempt Name"
+#string STR_NVMEOF_ATTEMPT_NAME_HELP              #language en-US "The human name defined for this attempt."
+#string STR_SELECT_MAC                            #language en-US "Network Device List"
+#string STR_SELECT_MAC_HELP                       #language en-US "Select the network device to use for this NVMe-oF Attempt configuration from available hardware MAC addresses."
+#string STR_NVMEOF_MAC_STRING                     #language en-US "NVMe-oF Network Device:"
+#string STR_NVMEOF_CONFIG_RETRY                   #language en-US "Connection Retry Count"
+#string STR_NVMEOF_CONFIG_RETRY_HELP              #language en-US "The minimum value is 0 and the maximum is 16. 0 means no retry."
+#string STR_IP_MODE_PROMPT                        #language en-US "Internet Protocol"
+#string STR_IP_MODE_HELP                          #language en-US "IP4, IP6, Autoconfigure. In Autoconfigure mode, NVMe-oF driver will attempt to connect NVMe-oF subsystem via IPv4 stack, if failed then attempt IPv6 stack."
+#string STR_IP_MODE_IP4                           #language en-US "IP4"
+#string STR_IP_MODE_IP6                           #language en-US "IP6"
+#string STR_IP_MODE_AUTOCONFIG                    #language en-US "Autoconfigure"
+#string STR_NVMEOF_ENABLE_DHCP                    #language en-US "Enable DHCP"
+#string STR_NVMEOF_LOCAL_IP_ADDRESS               #language en-US "  Host IP Address"
+#string STR_NVMEOF_LOCAL_MASK                     #language en-US "  Host Subnet Mask"
+#string STR_NVMEOF_LOCAL_GATEWAY                  #language en-US "  Gateway"
+#string STR_NVMEOF_IP_ADDRESS_HELP                #language en-US "Enter IP address in dotted-decimal notation."
+#string STR_NVMEOF_ENABLE_DHCP_ON_SUBSYS          #language en-US "Subsystem info from DHCP"
+#string STR_NVMEOF_SUBSYS_NQN                     #language en-US "  NVM Subsystem NQN"
+#string STR_NVMEOF_SUBSYS_NQN_HELP                #language en-US "The target subsystem's NVMe Qualified Name."
+#string STR_NVMEOF_SUBSYS_ADDRESS                 #language en-US "  NVM Subsystem Address"
+#string STR_NVMEOF_SUBSYS_ADDRESS_HELP            #language en-US "Enter NVM Subsystem address in IPv4,IPv6 or URL format. You need to configure DNS server address in advance if input a URL string."
+#string STR_NVMEOF_SUBSYS_PORT                    #language en-US "  NVM Subsystem Port"
+#string STR_NVMEOF_SUBSYS_NID                     #language en-US "NVM Subsystem NID"
+#string STR_NVMEOF_SUBSYS_NID_HELP                #language en-US "The NVM Subsystem's Namespace Identifier in either NVMe EUI-64, NVMe NGUID, or NVMe UUID string formats with respective prefixes \"eui:\", \"nvme-nguid:\", or \"urn:uuid:\"."
+#string STR_AUTHEN_TYPE_PROMPT                    #language en-US "Authentication Type"
+#string STR_AUTHEN_TYPE_HELP                      #language en-US "Authentication method: DH-HMAC-CHAP or None"
+#string STR_AUTHEN_TYPE_CHAP                      #language en-US "DH-HMAC-CHAP"
+#string STR_AUTHEN_TYPE_NONE                      #language en-US "None"
+#string STR_AUTHEN_SECURITY_KEY_PATH              #language en-US "  Security Key Path"
