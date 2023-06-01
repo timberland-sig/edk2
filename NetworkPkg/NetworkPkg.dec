@@ -101,6 +101,10 @@
   gEdkiiHttpCallbackProtocolGuid  = {0x611114f1, 0xa37b, 0x4468, {0xa4, 0x36, 0x5b, 0xdd, 0xa1, 0x6a, 0xa2, 0x40}}
 
 [PcdsFixedAtBuild]
+  ## The max attempt number created by the NVMe-oF driver.
+  # @Prompt Max NVMe-oF attempt number.
+  gEfiNetworkPkgTokenSpaceGuid.PcdMaxNvmeOfAttemptNumber|0x04|UINT8|0x0000000C
+
   ## The max attempt number will be created by iSCSI driver.
   # @Prompt Max attempt number.
   gEfiNetworkPkgTokenSpaceGuid.PcdMaxIScsiAttemptNumber|0x08|UINT8|0x0000000D
