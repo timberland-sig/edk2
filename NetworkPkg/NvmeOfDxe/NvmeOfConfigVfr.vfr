@@ -148,7 +148,7 @@ formset
             help    = STRING_TOKEN(STR_NVMEOF_IP_ADDRESS_HELP),
             flags   = INTERACTIVE,
             key     = KEY_GATE_WAY,
-            minsize = IP_STR_IFR_MIN_SIZE,
+            minsize = GATEWAY_STR_IFR_MIN_SIZE,
             maxsize = IP_STR_IFR_MAX_SIZE,
     endstring;
     endif;

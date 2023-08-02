@@ -1172,7 +1172,9 @@ NvmeOfConvertIfrNvDataToAttemptConfigData (
       return EFI_INVALID_PARAMETER;
     }
 
-    if (!IP4_NET_EQUAL (IpAddr.Addr[0], Gateway.Addr[0], SubnetMask.Addr[0])) {
+    if (  (Gateway.Addr[0] != 0)
+       && !IP4_NET_EQUAL (IpAddr.Addr[0], Gateway.Addr[0], SubnetMask.Addr[0]))
+    {
       CreatePopUp (
         EFI_LIGHTGRAY | EFI_BACKGROUND_BLUE,
         &Key,
@@ -2023,7 +2025,9 @@ NvmeOfFormCallback (
         break;
 
       case KEY_GATE_WAY:
-        if (IfrNvData->IpMode == IP_MODE_IP6) {
+        if ( IfrNvData->NvmeofSubsysHostGateway[0] == '\0' ) {
+          ZeroMem (&Private->Current->SubsysConfigData.NvmeofSubsysHostGateway, sizeof (EFI_IP_ADDRESS));
+        } else if (IfrNvData->IpMode == IP_MODE_IP6) {
           Status = NetLibStrToIp6 (IfrNvData->NvmeofSubsysHostGateway, &Gateway.v6);
           if (EFI_ERROR (Status) || !IpIsUnicast (&Gateway, IfrNvData->IpMode)) {
             CreatePopUp (
