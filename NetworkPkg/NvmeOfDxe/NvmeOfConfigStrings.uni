@@ -26,7 +26,7 @@
 #string STR_NVMEOF_MAC_FORM_TITLE                 #language en-US "Network Device List"
 #string STR_NVMEOF_CONFIG_HOST_NQN                #language en-US "Host NQN"
 #string STR_NVMEOF_CONFIG_HOST_NQN_HELP           #language en-US "The host's NVMe Qualified Name."
-#string STR_NVMEOF_CONFIG_HOST_ID                 #language en-US "Host NID"
+#string STR_NVMEOF_CONFIG_HOST_ID                 #language en-US "Host ID"
 #string STR_NVMEOF_CONFIG_HOST_ID_HELP            #language en-US "The host's NVM Namespace Identifier."
 #string STR_NVMEOF_CONFIG_HOST_SECURITY_PATH      #language en-US "Security Key Path"
 #string STR_NVMEOF_CONFIG_HOST_SECURITY_PATH_HELP #language en-US "The path to the host's storage security key."
