@@ -62,9 +62,10 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #define IP4_STR_IFR_MAX_SIZE  15
 #define IP4_STR_MAX_SIZE      16
 
-#define IP_STR_IFR_MIN_SIZE  2
-#define IP_STR_IFR_MAX_SIZE  39
-#define IP_STR_MAX_SIZE      40
+#define GATEWAY_STR_IFR_MIN_SIZE  0
+#define IP_STR_IFR_MIN_SIZE       2
+#define IP_STR_IFR_MAX_SIZE       39
+#define IP_STR_MAX_SIZE           40
 
 #define NVMEOF_MAX_MAC_STRING_LEN  96
 
