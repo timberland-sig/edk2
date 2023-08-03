@@ -1935,8 +1935,11 @@ NvmeOfInitializeGlobalNvData (
   )
 {
   NVMEOF_GLOBAL_DATA  *NvmeOfGlobalData;
+  EFI_GUID            *SystemGuid;
   EFI_STATUS          Status = EFI_SUCCESS;
   UINTN               Size;
+
+  SystemGuid = NULL;
 
   NvmeOfGlobalData = NvmeOfGetVariableAndSize (
                        L"NvmeofGlobalData",
@@ -1959,6 +1962,52 @@ NvmeOfInitializeGlobalNvData (
     if (NvmeOfGlobalData == NULL) {
       return EFI_OUT_OF_RESOURCES;
     }
+  }
+
+  //
+  // Set Host ID and/or Host NID according to system UUID if not already set
+  //
+  if (  (NvmeOfGlobalData->NvmeofHostId[0] == '\0')
+     || (NvmeOfGlobalData->NvmeofHostNqn[0] == '\0'))
+  {
+    SystemGuid = AllocateZeroPool (sizeof (EFI_GUID));
+    if (SystemGuid == NULL) {
+      return EFI_OUT_OF_RESOURCES;
+    }
+
+    Status = NetLibGetSystemGuid (SystemGuid);
+    if (EFI_ERROR (Status)) {
+      DEBUG ((
+        DEBUG_ERROR,
+        "%a: Cannot read system GUID.\n",
+        __FUNCTION__,
+        &gNvmeOfConfigGuid
+        ));
+    }
+
+    if (  (NvmeOfGlobalData->NvmeofHostId[0] == '\0')
+       && !IsZeroGuid (SystemGuid))
+    {
+      CopyMem (
+        NvmeOfGlobalData->NvmeofHostId,
+        SystemGuid,
+        sizeof (NvmeOfGlobalData->NvmeofHostId)
+        );
+    }
+
+    if (  (NvmeOfGlobalData->NvmeofHostNqn[0] == '\0')
+       && !IsZeroGuid (SystemGuid))
+    {
+      AsciiSPrint (
+        NvmeOfGlobalData->NvmeofHostNqn,
+        sizeof (NvmeOfGlobalData->NvmeofHostNqn),
+        "%a%g",
+        SPDK_NVMF_NQN_UUID_PRE,
+        SystemGuid
+        );
+    }
+
+    FreePool (SystemGuid);
   }
 
   //
