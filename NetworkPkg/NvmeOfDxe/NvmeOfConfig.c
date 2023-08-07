@@ -643,7 +643,6 @@ NvmeOfConfigUpdateDisplayedAttempts (
   VOID
   )
 {
-  NVMEOF_ATTEMPT_CONFIG_NVDATA  *AttemptConfigData;
   NVMEOF_ATTEMPT_CONFIG_NVDATA  *Attempt;
   VOID                          *StartOpCodeHandle;
   EFI_IFR_GUID_LABEL            *StartLabel;
@@ -752,7 +751,6 @@ NvmeOfConfigUpdateDisplayedAttempts (
                               );
 
     if (AttemptTitleHelpToken == 0) {
-      FreePool (AttemptConfigData);
       return;
     }
 
@@ -1023,19 +1021,21 @@ NvmeOfConvertAttemptConfigDataToIfrNvData (
 
     case IP_MODE_IP6:
       ZeroMem (IfrNvData->NvmeofSubsysHostIp, sizeof (IfrNvData->NvmeofSubsysHostIp));
-      if (SubsysConfigData->NvmeofSubsysHostIP.v6.Addr[0] != '\0') {
+      if (!IsZeroBuffer (SubsysConfigData->NvmeofSubsysHostIP.v6.Addr, sizeof (EFI_IPv6_ADDRESS))) {
         IP6_COPY_ADDRESS (&Ip.v6, &SubsysConfigData->NvmeofSubsysHostIP);
         NvmeOfIpToUnicodeStr (&Ip, TRUE, IfrNvData->NvmeofSubsysHostIp);
       }
 
       ZeroMem (IfrNvData->NvmeofSubsysHostGateway, sizeof (IfrNvData->NvmeofSubsysHostGateway));
-      if (SubsysConfigData->NvmeofSubsysHostGateway.v6.Addr[0] != '\0') {
+      if (!IsZeroBuffer (SubsysConfigData->NvmeofSubsysHostGateway.v6.Addr, sizeof (EFI_IPv6_ADDRESS))) {
         IP6_COPY_ADDRESS (&Ip.v6, &SubsysConfigData->NvmeofSubsysHostGateway);
         NvmeOfIpToUnicodeStr (&Ip, TRUE, IfrNvData->NvmeofSubsysHostGateway);
       }
 
       ZeroMem (IfrNvData->NvmeofSubsysIp, sizeof (IfrNvData->NvmeofSubsysIp));
-      if (SubsysConfigData->NvmeofSubSystemIp.v6.Addr[0] != '\0') {
+      if (  !SubsysConfigData->NvmeofDnsMode
+         && (!IsZeroBuffer (SubsysConfigData->NvmeofSubSystemIp.v6.Addr, sizeof (EFI_IPv6_ADDRESS))))
+      {
         IP6_COPY_ADDRESS (&Ip.v6, &SubsysConfigData->NvmeofSubSystemIp);
         NvmeOfIpToUnicodeStr (&Ip, TRUE, IfrNvData->NvmeofSubsysIp);
       }
@@ -1191,7 +1191,9 @@ NvmeOfConvertIfrNvDataToAttemptConfigData (
   //
   if (!IfrNvData->NvmeofSubsysInfoDhcp && (IfrNvData->IpMode < IP_MODE_AUTOCONFIG)) {
     if (!SubsysConfigData->NvmeofDnsMode) {
-      if (!IpIsUnicast (&SubsysConfigData->NvmeofSubSystemIp, IfrNvData->IpMode)) {
+      ZeroMem (&IpAddr, sizeof (EFI_IP_ADDRESS));
+      CopyMem (&IpAddr, &SubsysConfigData->NvmeofSubSystemIp, sizeof (IpAddr));
+      if (!IpIsUnicast (&IpAddr, IfrNvData->IpMode)) {
         CreatePopUp (
           EFI_LIGHTGRAY | EFI_BACKGROUND_BLUE,
           &Key,
