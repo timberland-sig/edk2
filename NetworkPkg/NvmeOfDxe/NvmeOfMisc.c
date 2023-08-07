@@ -1966,7 +1966,7 @@ NvmeOfInitializeGlobalNvData (
   }
 
   //
-  // Set Host ID and/or Host NID according to system UUID if not already set
+  // Set Host ID and/or Host NQN according to system UUID if not already set
   //
   if (  (NvmeOfGlobalData->NvmeofHostId[0] == '\0')
      || (NvmeOfGlobalData->NvmeofHostNqn[0] == '\0'))
@@ -1980,9 +1980,8 @@ NvmeOfInitializeGlobalNvData (
     if (EFI_ERROR (Status)) {
       DEBUG ((
         DEBUG_ERROR,
-        "%a: Cannot read system GUID.\n",
-        __FUNCTION__,
-        &gNvmeOfConfigGuid
+        "%a: Cannot read system UUID.\n",
+        __FUNCTION__
         ));
     }
 
