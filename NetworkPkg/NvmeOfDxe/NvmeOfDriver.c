@@ -2,7 +2,7 @@
   NvmeOf driver is used to manage non-volatile memory subsystem which follows
   NVM Express specification.
 
-  Copyright (c) 2021 - 2022, Dell Technologies. All rights reserved.<BR>
+  Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
   Copyright (c) 2022 - 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -20,7 +20,7 @@
 #include <Library/NetLib.h>
 #include <Library/TcpIoLib.h>
 #include <Protocol/ServiceBinding.h>
-#include <Protocol/NvmeOFPassthru.h>
+#include <Protocol/NvmeOfPassthru.h>
 #include <Guid/NvmeOfConfig.h>
 #include "NvmeOfImpl.h"
 #include "NvmeOfDns.h"
@@ -34,16 +34,19 @@ EFI_EVENT                        gBeforeEBSEvent = NULL;
 NVMEOF_PRIVATE_PROTOCOL          NVMEOF_Identifier;
 NVMEOF_NIC_PRIVATE_DATA          *mNicPrivate = NULL;
 LIST_ENTRY                       gNvmeOfControllerList;
+extern NVMEOF_CLI_CTRL_MAPPING   *gCliCtrlMap;
+extern NVMEOF_CLI_CTRL_MAPPING   *CtrlrInfo;
 CHAR8                            *gNvmeOfRootPath = NULL;
 BOOLEAN                          gAttemtsAlreadyRead = FALSE;
 CHAR8                            *gNvmeOfImagePath = NULL;
 BOOLEAN                          gDriverInRuntime = FALSE;
-EFI_HANDLE                       mImageHandle;
 
 EFI_GUID  gNvmeOfV4PrivateGuid = NVMEOF_V4_PRIVATE_GUID;
 EFI_GUID  gNvmeOfV6PrivateGuid = NVMEOF_V6_PRIVATE_GUID;
 
+extern EFI_HANDLE                mImageHandle;
 extern GLOBAL_REMOVE_IF_UNREFERENCED EFI_UNICODE_STRING_TABLE  *gNvmeOfControllerNameTable;
+extern VOID EFIAPI NvmeOfCliCleanup ();
 EFI_HANDLE     gPassThroughProtocolHandle;
 
 
@@ -1273,6 +1276,7 @@ NvmeOfStop (
   LIST_ENTRY                          *NextEntryProcessed = NULL;
   EFI_OPEN_PROTOCOL_INFORMATION_ENTRY *OpenInfoBuffer = NULL;
   UINTN                               EntryCount = 0;
+  NVMEOF_CLI_CTRL_MAPPING             *CtrlrInfoData = NULL;
 
   gAttemtsAlreadyRead = FALSE;
   NqnNidMapINdex = 0;
@@ -1294,6 +1298,10 @@ NvmeOfStop (
     mNicPrivate->Ipv6Flag = TRUE;
   } else {
     return EFI_DEVICE_ERROR;
+  }
+
+  if (gCliCtrlMap) {
+    NvmeOfCliCleanup ();
   }
 
   NvmeOfController = NetLibGetNicHandle (ControllerHandle, TcpProtocolGuid);
@@ -1395,6 +1403,13 @@ NvmeOfStop (
   //
   if (!gDriverInRuntime) {
     NvmeOfPublishNbft (FALSE);
+  }
+
+  NET_LIST_FOR_EACH_SAFE (Entry, NextEntryProcessed, &CtrlrInfo->CliCtrlrList) {
+    CtrlrInfoData =
+      NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
+    RemoveEntryList (&CtrlrInfoData->CliCtrlrList);
+    FreePool (CtrlrInfoData);
   }
 
   NET_LIST_FOR_EACH_SAFE (Entry, NextEntryProcessed, &mNicPrivate->AttemptConfigs) {
@@ -1682,6 +1697,10 @@ NvmeOfDriverUnload (
   //
   gBS->CloseEvent (gBeforeEBSEvent);
 
+  if (gCliCtrlMap) {
+    NvmeOfCliCleanup ();
+  }
+
   //
   // Try to disconnect the driver from the devices it's controlling.
   //
@@ -1866,6 +1885,16 @@ NvmeOfDriverUnload (
 
   ASSERT (IsListEmpty (&gNvmeOfControllerList));
 
+  if (gCliCtrlMap != NULL) {
+    FreePool (gCliCtrlMap);
+    gCliCtrlMap = NULL;
+  }
+
+  if (CtrlrInfo != NULL) {
+    FreePool (CtrlrInfo);
+    CtrlrInfo = NULL;
+  }
+
   if (gNvmeOfImagePath != NULL) {
     FreePool (gNvmeOfImagePath);
     gNvmeOfImagePath = NULL;
@@ -1966,10 +1995,23 @@ NvmeOfDriverEntry (
     goto Error2;
   }
 
-  InitializeListHead (&gNvmeOfControllerList);   
+  InitializeListHead (&gNvmeOfControllerList);
+
+  gCliCtrlMap = AllocateZeroPool (sizeof (NVMEOF_CLI_CTRL_MAPPING));
+  if (gCliCtrlMap == NULL) {
+    goto Error2;;
+  }
+
+  CtrlrInfo = AllocateZeroPool (sizeof (NVMEOF_CLI_CTRL_MAPPING));
+  if (CtrlrInfo == NULL) {
+    goto Error2;
+  }
+
   InitializeListHead (&mNicPrivate->NicInfoList);
   InitializeListHead (&mNicPrivate->AttemptConfigs);
   InitializeListHead (&mNicPrivate->ProcessedAttempts);
+  InitializeListHead (&gCliCtrlMap->CliCtrlrList);
+  InitializeListHead (&CtrlrInfo->CliCtrlrList);
 
   //
   // Create event for BeforeExitBootServices group.
@@ -1999,6 +2041,12 @@ Error2:
    // Free the allocations in case of failure.
    if (mNicPrivate != NULL) {
      FreePool (mNicPrivate);
+   }
+   if (gCliCtrlMap != NULL) {
+     FreePool (gCliCtrlMap);
+   }
+   if (CtrlrInfo != NULL) {
+     FreePool (CtrlrInfo);
    }
 
 Error1:

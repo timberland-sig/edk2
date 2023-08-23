@@ -1,7 +1,7 @@
 /** @file
   Functions to invoke SPDK API's for NVMeOF driver.
 
-  Copyright (c) 2021 - 2023, Dell Technologies. All rights reserved.<BR>
+  Copyright (c) 2021 - 2023 Dell, Inc. or its subsidiaries. All Rights Reserved.<BR>
   Copyright (c) 2022 - 2023, Intel Corporation. All rights reserved.<BR>
   Copyright (c) 2022, SUSE LLC. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -17,7 +17,7 @@
 #include "spdk_internal/sock.h"
 #include "nvme_internal.h"
 #include "edk_sock.h"
-// #include "NvmeOfCliInterface.h"
+#include "NvmeOfCliInterface.h"
 
 NVMEOF_NQN_NID gNvmeOfNqnNidMap[MAX_SUBSYSTEMS_SUPPORTED];
 NVMEOF_NBFT gNvmeOfNbftList[NID_MAX];
@@ -25,7 +25,7 @@ UINT8 NqnNidMapINdex = 0;
 UINT8 gNvmeOfNbftListIndex = 0;
 extern const struct spdk_nvme_transport_ops tcp_ops;
 extern struct spdk_net_impl g_edksock_net_impl;
-//NVMEOF_CLI_CTRL_MAPPING  *CtrlrInfo = NULL;
+NVMEOF_CLI_CTRL_MAPPING  *CtrlrInfo = NULL;
 STATIC struct spdk_nvmf_discovery_log_page *gDiscoveryPage;
 STATIC UINT32 gDiscoveryPageSize;
 STATIC UINT64 gDiscoveryPage_numrec;
@@ -152,8 +152,8 @@ NvmeOfAttachCallback (
   UINT8                             Index = 0;
   UINTN                             ActiveNs = 1;
   UINT16                            Cntliduser = 0;
-  // CHAR8                             Key[10] = { 0 };
-//  NVMEOF_CLI_CTRL_MAPPING           *MappingData = NULL;
+  CHAR8                             Key[10] = { 0 };
+  NVMEOF_CLI_CTRL_MAPPING           *MappingData = NULL;
   BOOLEAN                           NidToInstall;
 
   Private = (NVMEOF_DRIVER_DATA *)CallbackCtx;
@@ -237,21 +237,21 @@ NvmeOfAttachCallback (
     Device->TcpIo = Private->TcpIo;
 
     //For CLI ListConnected command
-//    MappingData = AllocateZeroPool (sizeof (NVMEOF_CLI_CTRL_MAPPING));
-    // if (MappingData == NULL) {
-    //   DEBUG ((DEBUG_ERROR, "Memory allocation to MapingData failed\n"));
-    //   FreePool (Device);
-    //   continue;
-    // }
+    MappingData = AllocateZeroPool (sizeof (NVMEOF_CLI_CTRL_MAPPING));
+    if (MappingData == NULL) {
+      DEBUG ((DEBUG_ERROR, "Memory allocation to MapingData failed\n"));
+      FreePool (Device);
+      continue;
+    }
 
-//    MappingData->Ctrlr = Ctrlr;
-//    sprintf (Key, "nvme%dn%d", Cntliduser, ActiveNs);
-//    strcpy (MappingData->Key, Key);
-//    MappingData->Ioqpair = Device->qpair;
-//    MappingData->Nsid = Device->NamespaceId;
-//    strcpy (MappingData->Traddr, Trid->traddr);
-//    strcpy (MappingData->Subnqn, Trid->subnqn);
-//    MappingData->Cntliduser = Cntliduser;
+    MappingData->Ctrlr = (VOID *) Ctrlr;
+    sprintf (Key, "nvme%dn%d", Cntliduser, ActiveNs);
+    strcpy (MappingData->Key, Key);
+    MappingData->Ioqpair = (VOID *) Device->qpair;
+    MappingData->Nsid = Device->NamespaceId;
+    strcpy (MappingData->Traddr, Trid->traddr);
+    strcpy (MappingData->Subnqn, Trid->subnqn);
+    MappingData->Cntliduser = Cntliduser;
     ActiveNs++;
 
     DEBUG ((DEBUG_INFO, "NumOfNamespaces : %d \n", NumOfNamespaces));
@@ -306,7 +306,7 @@ NvmeOfAttachCallback (
     Status = NvmeOfBuildDevicePath (Private, Device, &DevicePathNode, AttemptData);
     if (EFI_ERROR (Status)) {
       DEBUG ((DEBUG_ERROR, "Create device path failed\n"));
-      // FreePool (MappingData);
+      FreePool (MappingData);
       FreePool (Device);
       continue;
     }
@@ -346,12 +346,12 @@ NvmeOfAttachCallback (
       Status = NvmeOfInstallDeviceProtocols (Device, SecuritySendRecvSupported);
       if (EFI_ERROR (Status)) {
         DEBUG ((DEBUG_ERROR, "Device protocol installation failed\n"));
-        // FreePool (MappingData);
+        FreePool (MappingData);
         FreePool (Device);
         continue;
-      } /* else {
+      } else {
         InsertTailList (&CtrlrInfo->CliCtrlrList, &MappingData->CliCtrlrList);
-      }*/
+      }
     } 
 
     // Create a list pointers to be referenced for nBFT
