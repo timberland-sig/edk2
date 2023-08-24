@@ -101,7 +101,7 @@
   gEfiDiskInfoProtocolGuid                      ## BY_START
   gEfiStorageSecurityCommandProtocolGuid        ## BY_START
   gEfiAcpiTableProtocolGuid                     ## SOMETIMES_CONSUMES
-  gNvmeofPassThroughProtocolGuid                ## PRODUCES
+  gEdkiiNvmeofPassThruProtocolGuid              ## PRODUCES
   gEfiHiiConfigAccessProtocolGuid               ## PRODUCES
   gEfiNetworkInterfaceIdentifierProtocolGuid_31 ## SOMETIMES_CONSUMES
 

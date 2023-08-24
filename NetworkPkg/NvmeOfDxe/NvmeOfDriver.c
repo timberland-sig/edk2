@@ -20,7 +20,7 @@
 #include <Library/NetLib.h>
 #include <Library/TcpIoLib.h>
 #include <Protocol/ServiceBinding.h>
-#include <Protocol/NvmeOFPassthru.h>
+#include <Protocol/NvmeOfPassthru.h>
 #include <Guid/NvmeOfConfig.h>
 #include "NvmeOfImpl.h"
 #include "NvmeOfDns.h"
