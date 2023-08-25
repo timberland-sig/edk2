@@ -1,0 +1,39 @@
+#The config file can have only defined possible tags. 
+#The tag NvmeOfEnabled can be used only once.
+#The max attempt supported is 8. 
+#An attempt data must start with $Start and end with $End tags.
+#The spaces between the tags are not allowed and will result in unable to set UEFI variables.
+#Make sure the end of line doesn't contain any bad characters or any empty spaces. It may affect the tag value.
+#Application usage. NvmeOfCli.efi setattempt config_file_name"
+#Possible tags are as follow:
+HostNqn:
+HostId:
+$Start
+AttemptName:
+AutoConfigureMode:
+MacString:
+PrimaryDns:
+SecondaryDns:
+TargetPort:
+IpMode:
+LocalIp:
+SubnetMask:
+Gateway:
+InitiatorInfoFromDhcp:
+TargetInfoFromDhcp:
+TargetIp:
+ServerName:
+TransportPort:
+ControllerId:
+NID:
+NQN:
+TransportGUID:
+ConnectTimeout:
+ConnectRetryCount:
+DnsMode:
+RouteMetric:
+HostName:
+HostNqnOverride
+HostIdOverride
+HostOverrideEnable
+$End
