@@ -3,7 +3,7 @@
 
 Copyright (c) 2011 - 2023, Intel Corporation. All rights reserved.<BR>
 (C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>
-Copyright (c) 2022, Dell Technologies. All rights reserved.<BR>
+Copyright (c) 2022 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -743,7 +743,7 @@ BmGetNvmeofDescription (
     // When boot description is available, fit it in.
     // Initial DescriptionLen value already accounts for trailing zero.
     DescriptionLen += sizeof(L" - ") - sizeof(CHAR16);
-    DescriptionLen += StrLen (DiskDesc);
+    DescriptionLen += StrLen (DiskDesc) * sizeof(CHAR16);
   }
 
   Description = AllocateZeroPool (DescriptionLen);
@@ -819,7 +819,11 @@ BmGetMiscDescription (
       } else {
         Description = L"Misc Device";
       }
+      break;
 
+    case BmMessageNvmeofBoot:
+      //Description = L"NVMeOF Device";
+      return NULL;
       break;
 
     default:
