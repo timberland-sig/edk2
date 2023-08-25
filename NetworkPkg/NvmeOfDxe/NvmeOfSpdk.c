@@ -376,6 +376,35 @@ NvmeOfAttachCallback (
 }
 
 /**
+  Function to insert failed connection info in NBFT list.
+
+  @param[in]  NVMEOF_ATTEMPT_CONFIG_NVDATA   Attempt data
+  @param[in]  struct spdk_nvme_transport_id  Trid Info
+  @param[in]  BOOLEAN                        Flag indicating memory allocation \
+                                             required for IO/Discovery subsystem
+  @retval NONE                               VOID
+**/
+VOID
+InsertFailNodeNbft (
+  IN NVMEOF_ATTEMPT_CONFIG_NVDATA   *AttemptConfigData,
+  IN struct spdk_nvme_transport_id  *Trid,
+  IN BOOLEAN                        AllocReq
+  )
+{
+  if (AllocReq) {
+    gNvmeOfNbftList[gNvmeOfNbftListIndex].FailTridInfo = AllocateZeroPool (sizeof (struct spdk_nvme_transport_id));
+    if (gNvmeOfNbftList[gNvmeOfNbftListIndex].FailTridInfo == NULL) {
+      DEBUG ((DEBUG_ERROR, "Memory allocation to FailTridInfo failed\n"));
+    }
+    CopyMem (gNvmeOfNbftList[gNvmeOfNbftListIndex].FailTridInfo, Trid, sizeof (struct spdk_nvme_transport_id));
+  } else {
+    gNvmeOfNbftList[gNvmeOfNbftListIndex].FailTridInfo = Trid;
+  }
+  gNvmeOfNbftList[gNvmeOfNbftListIndex].AttemptData = AttemptConfigData;
+  gNvmeOfNbftList[gNvmeOfNbftListIndex].IsFailed = TRUE;
+}
+
+/**
   Populates transport data and calls SPDK probe
 
   @param  NVMEOF_DRIVER_DATA             Driver Private context.
@@ -400,6 +429,9 @@ NvmeOfProbeControllers (
   struct spdk_nvme_transport_id *Trid;
   struct spdk_nvme_ctrlr        *Ctrlr  = NULL;
   struct spdk_nvme_ctrlr_opts   Opts = {0, };
+  struct spdk_nvme_fail_trid    *FailedTridInfo;
+  LIST_ENTRY                    *Entry;
+  LIST_ENTRY                    *NextEntry;
 
   Trid = AllocateZeroPool (sizeof (struct spdk_nvme_transport_id));
   if (Trid == NULL) {
@@ -449,6 +481,9 @@ NvmeOfProbeControllers (
   if (spdk_nvme_probe (Trid, Private, NvmeOfProbeCallback,
                          NvmeOfAttachCallback, NULL) != 0) {
     DEBUG ((EFI_D_ERROR, "spdk_nvme_probe() failed for  %a\n", Trid->traddr));
+    // Filling attempt data for connecion failure case for IO & Discovery controller
+    InsertFailNodeNbft(AttemptConfigData, Trid, TRUE);
+    gNvmeOfNbftListIndex++;
     FreePool (Trid);
     return EFI_NOT_FOUND;
   } else {
@@ -466,6 +501,13 @@ NvmeOfProbeControllers (
       if (Ctrlr) {
         NVMeOfGetAsqz (Ctrlr);
         nvme_transport_ctrlr_destruct (Ctrlr);
+      }
+      // Failed discovered subsystem info for NBFT
+      NET_LIST_FOR_EACH_SAFE (Entry, NextEntry, &fail_conn) {
+        FailedTridInfo = NET_LIST_USER_STRUCT (Entry, struct spdk_nvme_fail_trid, link);
+        InsertFailNodeNbft (AttemptConfigData, &FailedTridInfo->trid, FALSE);
+        RemoveEntryList (Entry);
+        FreePool (FailedTridInfo);
       }
     }
   }
@@ -627,6 +669,9 @@ NVMeOfGetAsqz (
     struct spdk_nvmf_discovery_log_page_entry *Entry = &gDiscoveryPage->entries[DCntr];
      
     for (NCntr = 0; NCntr < gNvmeOfNbftListIndex; NCntr++) {
+      if (gNvmeOfNbftList[NCntr].IsFailed == TRUE) {
+        continue;
+       }
       IsDiscovery = gNvmeOfNbftList[NCntr].Device->Controller->IsDiscoveryNqn;
       TrAddress = gNvmeOfNbftList[NCntr].Device->NameSpace->ctrlr->trid.traddr;
 
