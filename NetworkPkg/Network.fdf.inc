@@ -6,6 +6,7 @@
 # according to the value of flags described in "NetworkPkg/Network.dsc.inc".
 #
 # Copyright (c) 2019, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 #
 #    SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -62,6 +63,7 @@
 
   !if $(NETWORK_NVMEOF_ENABLE) == TRUE
    INF  NetworkPkg/NvmeOfDxe/NvmeOfDxe.inf
+   INF  NetworkPkg/Application/NvmeOfCli/NvmeOfCli.inf
    INF  NetworkPkg/DnsDxe/DnsDxe.inf
   !endif
 !endif
