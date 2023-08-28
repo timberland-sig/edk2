@@ -72,6 +72,11 @@
 [LibraryClasses.common.UEFI_APPLICATION]
   DebugLib|MdePkg/Library/UefiDebugLibStdErr/UefiDebugLibStdErr.inf
   ShellLib|ShellPkg/Library/UefiShellLib/UefiShellLib.inf
+  ShellCEntryLib|ShellPkg/Library/UefiShellCEntryLib/UefiShellCEntryLib.inf
+  ShellLib|ShellPkg/Library/UefiShellLib/UefiShellLib.inf
+  ShellCommandLib|ShellPkg/Library/UefiShellCommandLib/UefiShellCommandLib.inf
+  HandleParsingLib|ShellPkg/Library/UefiHandleParsingLib/UefiHandleParsingLib.inf
+  OrderedCollectionLib|MdePkg/Library/BaseOrderedCollectionRedBlackTreeLib/BaseOrderedCollectionRedBlackTreeLib.inf
 
 [LibraryClasses.ARM, LibraryClasses.AARCH64]
   #
@@ -122,6 +127,7 @@
 [Components]
   NetworkPkg/WifiConnectionManagerDxe/WifiConnectionManagerDxe.inf
   NetworkPkg/Application/VConfig/VConfig.inf
+  NetworkPkg/Application/NvmeOfCli/NvmeOfCli.inf
   NetworkPkg/Library/DxeDpcLib/DxeDpcLib.inf
   NetworkPkg/Library/DxeHttpLib/DxeHttpLib.inf
   NetworkPkg/Library/DxeHttpIoLib/DxeHttpIoLib.inf
