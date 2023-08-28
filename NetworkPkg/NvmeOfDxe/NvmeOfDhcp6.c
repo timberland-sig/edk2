@@ -395,7 +395,7 @@ NvmeOfDhcp6ParseReply (
         //
         CopyMem (&ConfigData->SecondaryDns, &OptionList[Index]->Data[16], sizeof (EFI_IPv6_ADDRESS));
       }
-    } else if (OptionList[Index]->OpCode == DHCP6_OPT_VENDOR_OPTS) {
+    } else if (OptionList[Index]->OpCode == DHCP6_OPT_BOOT_FILE_URL) {
       // The server sends this option to inform the client about an URL to a boot file.
       //
       BootFileOpt = OptionList[Index];
@@ -515,7 +515,7 @@ NvmeOfDoDhcp6 (
   Oro->OpCode  = HTONS (DHCP6_OPT_ORO);
   Oro->OpLen   = HTONS (2 * 3);
   Oro->Data[1] = DHCP6_OPT_DNS_SERVERS;
-  Oro->Data[3] = DHCP6_OPT_VENDOR_OPTS;
+  Oro->Data[3] = DHCP6_OPT_BOOT_FILE_URL;
 
   InfoReqReXmit.Irt = 4;
   InfoReqReXmit.Mrc = 1;
