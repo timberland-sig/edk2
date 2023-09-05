@@ -113,16 +113,18 @@ formset
 
     subtitle text = STRING_TOKEN(STR_NULL);
 
-    suppressif ideqval NVMEOF_CONFIG_IFR_NVDATA.IpMode == IP_MODE_AUTOCONFIG;
-
+    grayoutif ideqval NVMEOF_CONFIG_IFR_NVDATA.IpMode == IP_MODE_AUTOCONFIG;
     checkbox varid = NVMEOF_CONFIG_IFR_NVDATA.HostInfoDhcp,
             prompt = STRING_TOKEN(STR_NVMEOF_ENABLE_DHCP),
             help   = STRING_TOKEN(STR_NVMEOF_ENABLE_DHCP),
             flags  = INTERACTIVE,
             key    = KEY_DHCP_ENABLE,
     endcheckbox;
+    endif;
 
-    suppressif ideqval NVMEOF_CONFIG_IFR_NVDATA.HostInfoDhcp == 0x01;
+    suppressif ideqval NVMEOF_CONFIG_IFR_NVDATA.IpMode == IP_MODE_AUTOCONFIG OR
+               ideqval NVMEOF_CONFIG_IFR_NVDATA.HostInfoDhcp == 0x01;
+
     string  varid   = NVMEOF_CONFIG_IFR_NVDATA.NvmeofSubsysHostIp,
             prompt  = STRING_TOKEN(STR_NVMEOF_LOCAL_IP_ADDRESS),
             help    = STRING_TOKEN(STR_NVMEOF_IP_ADDRESS_HELP),
@@ -153,9 +155,7 @@ formset
     endstring;
     endif;
 
-    suppressif ideqval NVMEOF_CONFIG_IFR_NVDATA.IpMode == IP_MODE_AUTOCONFIG;
     subtitle text = STRING_TOKEN(STR_NULL);
-    endif;
 
     grayoutif ideqval NVMEOF_CONFIG_IFR_NVDATA.IpMode == IP_MODE_AUTOCONFIG OR
                ideqval NVMEOF_CONFIG_IFR_NVDATA.HostInfoDhcp == 0x00;
@@ -210,11 +210,7 @@ formset
             maxsize = NVMEOF_NID_IFR_MAX_SIZE,
     endstring;
 
-    endif;
-
-    suppressif ideqval NVMEOF_CONFIG_IFR_NVDATA.IpMode == IP_MODE_AUTOCONFIG;
     subtitle text = STRING_TOKEN(STR_NULL);
-    endif;
 
     text
       help   = STRING_TOKEN (STR_SAVE_CHANGES_HELP),

@@ -996,6 +996,11 @@ NvmeOfConvertAttemptConfigDataToIfrNvData (
     );
 
   switch (IfrNvData->IpMode) {
+    case IP_MODE_AUTOCONFIG:
+      IfrNvData->HostInfoDhcp         = NVMEOF_DHCP_ENABLED;
+      IfrNvData->NvmeofSubsysInfoDhcp = NVMEOF_DHCP_ENABLED;
+      break;
+
     case IP_MODE_IP4:
       ZeroMem (IfrNvData->NvmeofSubsysHostIp, sizeof (IfrNvData->NvmeofSubsysHostIp));
       if (SubsysConfigData->NvmeofSubsysHostIP.v4.Addr[0] != '\0') {
@@ -1124,6 +1129,7 @@ NvmeOfConvertIfrNvDataToAttemptConfigData (
       );
     return EFI_INVALID_PARAMETER;
   }
+
   UnicodeStrToAsciiStrS (
     IfrNvData->NvmeofSubsysMacString,
     Attempt->MacString,
@@ -1927,6 +1933,11 @@ NvmeOfFormCallback (
 
       case KEY_IP_MODE:
         switch (Value->u8) {
+          case IP_MODE_AUTOCONFIG:
+            IfrNvData->HostInfoDhcp         = NVMEOF_DHCP_ENABLED;
+            IfrNvData->NvmeofSubsysInfoDhcp = NVMEOF_DHCP_ENABLED;
+            break;
+
           case IP_MODE_IP6:
             if (IfrNvData->NvmeofSubsysMacString[0] == '\0') {
               IfrNvData->IpMode = IP_MODE_IP4;
