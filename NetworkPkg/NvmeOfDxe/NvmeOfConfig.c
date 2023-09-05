@@ -363,7 +363,11 @@ NvmeOfConfigUpdateNicInfoList (
                                &NicInfo->Ipv6Support
                                );
     if (EFI_ERROR (Status)) {
-      NicInfo->Ipv6Support = FALSE;
+      //
+      // Fail to get the data whether UNDI supports IPv6.
+      // Set default value to TRUE.
+      //
+      NicInfo->Ipv6Support = TRUE;
     }
 
     InsertTailList (&mConfigPrivate->NicInfoList, &NicInfo->Link);
