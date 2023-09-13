@@ -606,6 +606,87 @@ NvmeOfFillSubsystemNamespaceSection (
 
   // Iterate on each namespace and populate the details.
   for (Index = 0; Index < gNvmeOfNbftListIndex; Index++) {
+    //
+    // Fill the Subsystem Namespace section.
+    //
+    SubsystemNamespace->StructureId                    = EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_NAMESPACE_DESCRIPTOR_ID;
+    Control->SubSystemVersion                          = EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_VERSION;
+    Control->SubSystemDescLength                       = (UINT16)sizeof (EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_NAMESPACE_DESCRIPTOR);
+    SubsystemNamespace->Index                          = (UINT16)DeviceIndex + 1;
+    SubsystemNamespace->Flags                         |= EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_FLAG_BLOCK_VALID;
+    SubsystemNamespace->SubsystemTransportAdressLength = sizeof (EFI_IPv6_ADDRESS);
+    SubsystemNamespace->HfiAssociationLen              = sizeof (UINT8);
+
+    // SsnsExtInfo section
+    SsnsExtInfo.StructureId                    = EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_NAMESPACE_INFO_EXT_DESCRIPTOR_ID;
+    SsnsExtInfo.Version                        = EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_EXT_INFO_DESCRIPTOR_VERSION;
+    SsnsExtInfo.SsnsIndex                      = Index + 1;
+    SsnsExtInfo.Flags                          = EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_EXT_INFO_DESCRIPTOR_VERSION_FLAG_STRUCTURE_VALID;
+    SubsystemNamespace->Flags                 |= EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_FLAG_USE_SSNS_EXT_INFO;
+    SubsystemNamespace->SsnsExtendedInfoLength = sizeof (EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_EXT_INFO_DESCRIPTOR);
+
+    // Transport type
+    SubsystemNamespace->TransportType = NVMEOF_TRANSPORT_TCP;
+    if (gNvmeOfNbftList[Index].IsDiscoveryNqn) {
+      SubsystemNamespace->PrimaryDiscoveryCtrlrIndex = gNvmeOfNbftList[Index].DeviceAdapterIndex;
+      // Update flag
+      SubsystemNamespace->Flags |= EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_FLAG_DISCOVERED_NAMESPACE;
+    }
+
+    // Root Path in heap
+    if (gNvmeOfRootPath != NULL) {
+      SsnsExtInfo.DhcpRootPathLength = (AsciiStrLen (gNvmeOfRootPath) - 1);
+    } else {
+      SsnsExtInfo.DhcpRootPathLength = 0;
+    }
+
+    // For failed connection
+    if (gNvmeOfNbftList[Index].IsFailed == TRUE) {
+      SubsystemNamespace->Flags |= EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_FLAG_UNAVAILABLE_NAMESPACE_1;
+      // Transport address
+      if ((gNvmeOfNbftList[Index].AttemptData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP4) ||
+          (gNvmeOfNbftList[Index].AttemptData->AutoConfigureMode == IP_MODE_AUTOCONFIG_IP4))
+      {
+        EFI_IPv4_ADDRESS  v4;
+        NetLibAsciiStrToIp4 (gNvmeOfNbftList[Index].FailTridInfo->traddr, &v4);
+        NvmeOfMapV4ToV6Addr (&v4, &SubsytemTrasportAddress);
+        NvmeOfAddHeapItem (Heap, &SubsytemTrasportAddress, sizeof (EFI_IPv6_ADDRESS));
+      } else if ((gNvmeOfNbftList[Index].AttemptData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP6) ||
+                 (gNvmeOfNbftList[Index].AttemptData->AutoConfigureMode == IP_MODE_AUTOCONFIG_IP6))
+      {
+        NetLibAsciiStrToIp6 (
+          gNvmeOfNbftList[Index].FailTridInfo->traddr,
+          &SubsytemTrasportAddress
+          );
+        NvmeOfAddHeapItem (Heap, &SubsytemTrasportAddress, sizeof (EFI_IPv6_ADDRESS));
+      } else {
+        ASSERT (FALSE);
+      }
+
+      // Transport port
+      Len                                                   = AsciiStrLen (gNvmeOfNbftList[Index].FailTridInfo->trsvcid);
+      SubsystemNamespace->SubsystemTransportServiceIdLength = Len;
+      NvmeOfAddHeapItem (Heap, gNvmeOfNbftList[Index].FailTridInfo->trsvcid, Len);
+      SubsystemNamespace->PrimaryHfiDescriptorIndex = HfiHeader->Index;
+      // HFI association
+      NvmeOfAddHeapItem (Heap, &(gNvmeOfNbftList[Index].DeviceAdapterIndex), sizeof (UINT8));
+      // Fill the subsystem NQN into the heap.
+      Len = (UINT16)AsciiStrLen (gNvmeOfNbftList[Index].FailTridInfo->subnqn);
+      NvmeOfAddHeapItem (Heap, gNvmeOfNbftList[Index].FailTridInfo->subnqn, Len);
+      SubsystemNamespace->SubsystemNamespaceNqnLen = Len;
+      // Copy SsnsExtInfo  to heap and update the SubSystem Namespace header structure
+      NvmeOfAddHeapItem (Heap, &SsnsExtInfo, sizeof (EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_EXT_INFO_DESCRIPTOR));
+      if (SsnsExtInfo.DhcpRootPathLength > 0) {
+        NvmeOfAddHeapItem (Heap, gNvmeOfRootPath, SsnsExtInfo.DhcpRootPathLength);
+      }
+
+      // Advance the subsystem namespace section
+      SubsystemNamespace = (EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_NAMESPACE_DESCRIPTOR *)((UINTN)SubsystemNamespace +
+                                                                                  NBFT_ROUNDUP (sizeof (EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_NAMESPACE_DESCRIPTOR)));
+      DeviceIndex++;
+      continue;
+    }
+
     // Logic to skip already processed namespace by comparing NID
     AlreadyProcessed = FALSE;
     NET_LIST_FOR_EACH_SAFE (ProcessedEntry, NextEntryProcessed, &gProcessedNamespaceList.Link) {
@@ -621,25 +702,7 @@ NvmeOfFillSubsystemNamespaceSection (
       continue;
     }
 
-    //
-    // Fill the Subsystem Namespace section.
-    //
-    SubsystemNamespace->StructureId = EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_NAMESPACE_DESCRIPTOR_ID;
-    Control->SubSystemVersion       = EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_VERSION;
-    Control->SubSystemDescLength    = (UINT16)sizeof (EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_NAMESPACE_DESCRIPTOR);
-    SubsystemNamespace->Index       = (UINT16)DeviceIndex + 1;
-    SubsystemNamespace->Flags       = EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_FLAG_BLOCK_VALID;
-    // Transport type
-    SubsystemNamespace->TransportType = NVMEOF_TRANSPORT_TCP;
-
-    if (gNvmeOfNbftList[Index].IsDiscoveryNqn) {
-      SubsystemNamespace->PrimaryDiscoveryCtrlrIndex = gNvmeOfNbftList[Index].DeviceAdapterIndex;
-      // Update flag
-      SubsystemNamespace->Flags |= EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_FLAG_DISCOVERED_NAMESPACE;
-    }
-
     // Transport address
-    SubsystemNamespace->SubsystemTransportAdressLength = sizeof (EFI_IPv6_ADDRESS);
     if ((gNvmeOfNbftList[Index].AttemptData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP4) ||
         (gNvmeOfNbftList[Index].AttemptData->AutoConfigureMode == IP_MODE_AUTOCONFIG_IP4))
     {
@@ -687,10 +750,6 @@ NvmeOfFillSubsystemNamespaceSection (
     NvmeOfAddHeapItem (Heap, gNvmeOfNbftList[Index].Device->NameSpace->ctrlr->trid.subnqn, Len);
     SubsystemNamespace->SubsystemNamespaceNqnLen = Len;
 
-    SsnsExtInfo.StructureId = EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_NAMESPACE_INFO_EXT_DESCRIPTOR_ID;
-    SsnsExtInfo.Version     = EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_EXT_INFO_DESCRIPTOR_VERSION;
-    SsnsExtInfo.SsnsIndex   = Index + 1;
-    SsnsExtInfo.Flags       = EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_EXT_INFO_DESCRIPTOR_VERSION_FLAG_STRUCTURE_VALID;
     // Controller ID
     SsnsExtInfo.ControllerId = gNvmeOfNbftList[Index].Device->NameSpace->ctrlr->cntlid;
     if (gNvmeOfNbftList[Index].IsDiscoveryNqn) {
@@ -700,21 +759,11 @@ NvmeOfFillSubsystemNamespaceSection (
       SsnsExtInfo.Asqsz = DEFAULT_ADMIN_QUEUE_SIZE;
     }
 
-    // Root Path in heap
-    if (gNvmeOfRootPath != NULL) {
-      SsnsExtInfo.DhcpRootPathLength = (AsciiStrLen (gNvmeOfRootPath) - 1);
-    } else {
-      SsnsExtInfo.DhcpRootPathLength = 0;
-    }
-
     // Copy SsnsExtInfo  to heap and update the SubSystem Namespace header structure
     NvmeOfAddHeapItem (Heap, &SsnsExtInfo, sizeof (EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_EXT_INFO_DESCRIPTOR));
-    SubsystemNamespace->SsnsExtendedInfoLength = sizeof (EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_EXT_INFO_DESCRIPTOR);
     if (SsnsExtInfo.DhcpRootPathLength > 0) {
       NvmeOfAddHeapItem (Heap, gNvmeOfRootPath, SsnsExtInfo.DhcpRootPathLength);
     }
-
-    SubsystemNamespace->Flags |=  EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_FLAG_USE_SSNS_EXT_INFO;
 
     // Add an entry to processed namespace list
     ProcessedNamespace = AllocateZeroPool (sizeof (NVMEOF_PROCESSED_NAMESPACE));

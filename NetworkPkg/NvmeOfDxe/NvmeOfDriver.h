@@ -293,10 +293,12 @@ extern NVMEOF_NQN_NID  gNvmeOfNqnNidMap[];
 extern UINT8           NqnNidMapINdex;
 
 typedef struct _NVMEOF_NBFT {
-  UINT8                           DeviceAdapterIndex;
-  BOOLEAN                         IsDiscoveryNqn;
-  NVMEOF_DEVICE_PRIVATE_DATA      *Device;
-  NVMEOF_ATTEMPT_CONFIG_NVDATA    *AttemptData;
+  UINT8                            DeviceAdapterIndex;
+  BOOLEAN                          IsDiscoveryNqn;
+  NVMEOF_DEVICE_PRIVATE_DATA       *Device;
+  NVMEOF_ATTEMPT_CONFIG_NVDATA     *AttemptData;
+  struct spdk_nvme_transport_id    *FailTridInfo;
+  BOOLEAN                          IsFailed;
 } NVMEOF_NBFT;
 extern NVMEOF_NBFT  gNvmeOfNbftList[];
 extern UINT8        gNvmeOfNbftListIndex;
