@@ -39,15 +39,16 @@ typedef struct _NVMEOF_CONNECT_COMMAND {
 } NVMEOF_CONNECT_COMMAND;
 
 typedef struct _NVMEOF_CLI_CTRL_MAPPING {
-  VOID          *Ctrlr;
-  VOID          *Ioqpair;
-  CHAR8         Key[KEY_SIZE];
-  UINTN         Nsid;
-  UINT16        Cntliduser;
-  CHAR8         Traddr[ADDR_SIZE];
-  CHAR8         Trsvcid[ADDR_SIZE];
-  CHAR8         Subnqn[NVMEOF_CLI_MAX_SIZE];
-  LIST_ENTRY    CliCtrlrList;
+  struct spdk_nvme_ctrlr    *Ctrlr;
+  struct spdk_nvme_qpair    *Ioqpair;
+  VOID                      *Private;
+  CHAR8                     Key[KEY_SIZE];
+  UINTN                     Nsid;
+  UINT16                    Cntliduser;
+  CHAR8                     Traddr[ADDR_SIZE];
+  CHAR8                     Trsvcid[ADDR_SIZE];
+  CHAR8                     Subnqn[NVMEOF_CLI_MAX_SIZE];
+  LIST_ENTRY                CliCtrlrList;
 } NVMEOF_CLI_CTRL_MAPPING;
 
 typedef struct _NVMEOF_READ_WRITE_DATA {
