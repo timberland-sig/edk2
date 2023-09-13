@@ -46,7 +46,7 @@ struct spdk_edk_sock {
   // Receive context
   NET_BUF                     *Pdu;
   UINTN                       MaxPduLen;
-  EFI_TCP4_IO_TOKEN           RxToken;
+  TCP_IO_IO_TOKEN             RxToken;
   EFI_TCP4_RECEIVE_DATA       RxData;
   EFI_EVENT                   RxEvent;
   BOOLEAN                     RxPending;
