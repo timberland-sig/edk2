@@ -29,22 +29,28 @@
 #include "NvmeOfCliInterface.h"
 #include "NvmeOfNbft.h"
 
-EFI_EVENT                KatoEvent       = NULL;
-EFI_EVENT                gBeforeEBSEvent = NULL;
-NVMEOF_PRIVATE_PROTOCOL  NVMEOF_Identifier;
-NVMEOF_NIC_PRIVATE_DATA  *mNicPrivate = NULL;
-LIST_ENTRY               gNvmeOfControllerList;
-CHAR8                    *gNvmeOfRootPath    = NULL;
-BOOLEAN                  gAttemtsAlreadyRead = FALSE;
-CHAR8                    *gNvmeOfImagePath   = NULL;
-BOOLEAN                  gDriverInRuntime    = FALSE;
-EFI_HANDLE               mImageHandle;
+EFI_EVENT                       KatoEvent       = NULL;
+EFI_EVENT                       gBeforeEBSEvent = NULL;
+NVMEOF_PRIVATE_PROTOCOL         NVMEOF_Identifier;
+NVMEOF_NIC_PRIVATE_DATA         *mNicPrivate = NULL;
+LIST_ENTRY                      gNvmeOfControllerList;
+extern NVMEOF_CLI_CTRL_MAPPING  *gCliCtrlMap;
+extern NVMEOF_CLI_CTRL_MAPPING  *CtrlrInfo;
+CHAR8                           *gNvmeOfRootPath    = NULL;
+BOOLEAN                         gAttemtsAlreadyRead = FALSE;
+CHAR8                           *gNvmeOfImagePath   = NULL;
+BOOLEAN                         gDriverInRuntime    = FALSE;
 
 EFI_GUID  gNvmeOfV4PrivateGuid = NVMEOF_V4_PRIVATE_GUID;
 EFI_GUID  gNvmeOfV6PrivateGuid = NVMEOF_V6_PRIVATE_GUID;
 
+extern EFI_HANDLE                                              mImageHandle;
 extern GLOBAL_REMOVE_IF_UNREFERENCED EFI_UNICODE_STRING_TABLE  *gNvmeOfControllerNameTable;
-EFI_HANDLE                                                     gPassThroughProtocolHandle;
+extern VOID EFIAPI
+NvmeOfCliCleanup (
+  );
+
+EFI_HANDLE  gPassThroughProtocolHandle;
 
 EFI_DRIVER_BINDING_PROTOCOL  gNvmeOfIp4DriverBinding = {
   NvmeOfIp4DriverBindingSupported,
@@ -1327,6 +1333,7 @@ NvmeOfStop (
   LIST_ENTRY                           *NextEntryProcessed = NULL;
   EFI_OPEN_PROTOCOL_INFORMATION_ENTRY  *OpenInfoBuffer     = NULL;
   UINTN                                EntryCount          = 0;
+  NVMEOF_CLI_CTRL_MAPPING              *CtrlrInfoData      = NULL;
 
   gAttemtsAlreadyRead = FALSE;
   NqnNidMapINdex      = 0;
@@ -1348,6 +1355,10 @@ NvmeOfStop (
     mNicPrivate->Ipv6Flag = TRUE;
   } else {
     return EFI_DEVICE_ERROR;
+  }
+
+  if (gCliCtrlMap) {
+    NvmeOfCliCleanup ();
   }
 
   NvmeOfController = NetLibGetNicHandle (ControllerHandle, TcpProtocolGuid);
@@ -1452,6 +1463,13 @@ NvmeOfStop (
   //
   if (!gDriverInRuntime) {
     NvmeOfPublishNbft (FALSE);
+  }
+
+  NET_LIST_FOR_EACH_SAFE (Entry, NextEntryProcessed, &CtrlrInfo->CliCtrlrList) {
+    CtrlrInfoData =
+      NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
+    RemoveEntryList (&CtrlrInfoData->CliCtrlrList);
+    FreePool (CtrlrInfoData);
   }
 
   NET_LIST_FOR_EACH_SAFE (Entry, NextEntryProcessed, &mNicPrivate->AttemptConfigs) {
@@ -1738,6 +1756,10 @@ NvmeOfDriverUnload (
   //
   gBS->CloseEvent (gBeforeEBSEvent);
 
+  if (gCliCtrlMap) {
+    NvmeOfCliCleanup ();
+  }
+
   //
   // Try to disconnect the driver from the devices it's controlling.
   //
@@ -1925,6 +1947,16 @@ NvmeOfDriverUnload (
 
   ASSERT (IsListEmpty (&gNvmeOfControllerList));
 
+  if (gCliCtrlMap != NULL) {
+    FreePool (gCliCtrlMap);
+    gCliCtrlMap = NULL;
+  }
+
+  if (CtrlrInfo != NULL) {
+    FreePool (CtrlrInfo);
+    CtrlrInfo = NULL;
+  }
+
   if (gNvmeOfImagePath != NULL) {
     FreePool (gNvmeOfImagePath);
     gNvmeOfImagePath = NULL;
@@ -2027,9 +2059,22 @@ NvmeOfDriverEntry (
   }
 
   InitializeListHead (&gNvmeOfControllerList);
+
+  gCliCtrlMap = AllocateZeroPool (sizeof (NVMEOF_CLI_CTRL_MAPPING));
+  if (gCliCtrlMap == NULL) {
+    goto Error2;
+  }
+
+  CtrlrInfo = AllocateZeroPool (sizeof (NVMEOF_CLI_CTRL_MAPPING));
+  if (CtrlrInfo == NULL) {
+    goto Error2;
+  }
+
   InitializeListHead (&mNicPrivate->NicInfoList);
   InitializeListHead (&mNicPrivate->AttemptConfigs);
   InitializeListHead (&mNicPrivate->ProcessedAttempts);
+  InitializeListHead (&gCliCtrlMap->CliCtrlrList);
+  InitializeListHead (&CtrlrInfo->CliCtrlrList);
 
   //
   // Create event for BeforeExitBootServices group.
@@ -2059,6 +2104,14 @@ Error2:
   // Free the allocations in case of failure.
   if (mNicPrivate != NULL) {
     FreePool (mNicPrivate);
+  }
+
+  if (gCliCtrlMap != NULL) {
+    FreePool (gCliCtrlMap);
+  }
+
+  if (CtrlrInfo != NULL) {
+    FreePool (CtrlrInfo);
   }
 
 Error1:
