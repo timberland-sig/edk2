@@ -979,7 +979,7 @@ BmGetNvmeofDescription (
     // When boot description is available, fit it in.
     // Initial DescriptionLen value already accounts for trailing zero.
     DescriptionLen += sizeof (L" - ") - sizeof (CHAR16);
-    DescriptionLen += StrLen (DiskDesc);
+    DescriptionLen += StrLen (DiskDesc) * sizeof (CHAR16);
   }
 
   Description = AllocateZeroPool (DescriptionLen);
@@ -1056,6 +1056,11 @@ BmGetMiscDescription (
         Description = L"Misc Device";
       }
 
+      break;
+
+    case BmMessageNvmeofBoot:
+      // Description = L"NVMeOF Device";
+      return NULL;
       break;
 
     default:
