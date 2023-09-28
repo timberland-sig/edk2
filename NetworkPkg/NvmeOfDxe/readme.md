@@ -72,11 +72,25 @@
       - [7.2.5 <span id="_Toc81475884" class="anchor"></span>Identify structure](#725-identify-structure)
       - [7.2.6 <span id="_Toc81475885" class="anchor"></span>Disconnect structure](#726-disconnect-structure)
       - [7.2.7 <span id="_Toc81475886" class="anchor"></span>Read Write Block structure](#727-read-write-block-structure)
-  - [8 <span id="_Toc81475887" class="anchor"></span>Packaging<span id="_Toc131393231" class="anchor"></span>](#8-packaging)
-    - [8.1 NVMeOF Driver Deployment Structure](#81-nvmeof-driver-deployment-structure)
-      - [8.1.1 <span id="_Toc81475889" class="anchor"></span>NvmeOfDxe - Driver Files](#811-nvmeofdxe---driver-files)
-      - [8.1.2 <span id="_Toc81475890" class="anchor"></span>NvmeOfCli - CLI Files](#812-nvmeofcli---cli-files)
-      - [8.1.3 <span id="_Toc81475891" class="anchor"></span>NvmeOf Library Files](#813-nvmeof-library-files)
+  - [8 NVMe-oF UEFI HII Design](#8-nvme-of-uefi-hii-design)
+      - [8.1 HII Pages](#81-hii-pages)
+          - [8.1.1 F2 → Device Manager → NVMe-oF Configuration](#811-f2--device-manager--nvme-of-configuration)
+          - [8.1.2 F2 → Device Manager → NVMe-oF Configuration → Attempt \<\#\>](#812-f2--device-manager--nvme-of-configuration--attempt-)
+          - [8.1.3 F2 → Device Manager → NVMe-oF Configuration → Attempt \<\#\> → Network Device List](#813-f2--device-manager--nvme-of-configuration--attempt---network-device-list)
+      - [8.2 HII configuration data](#82-hii-configuration-data)
+          - [8.2.1 HII data to display mapping](#821-hii-data-to-display-mapping)
+      - [8.3 HII ↔ NVMe-oF driver communication](#83-hii--nvme-of-driver-communication)
+          - [8.3.1 HII data to NVMe-oF driver data mapping](#831-hii-data-to-nvme-of-driver-data-mapping)
+      - [8.4 HII Behavior](#84-hii-behavior)
+          - [8.4.1 Devices List→NVMe-oF entry](#841-devices-listnvme-of-entry)
+          - [8.4.2 NVMe-oF main form, non-configured](#842-nvme-of-main-form-non-configured)
+          - [8.4.3 NVMe-oF configuration: attempt form entry](#843-nvme-of-configuration-attempt-form-entry)
+          - [8.4.4 NVMe-oF example configuration](#844-nvme-of-example-configuration)
+  - [9 <span id="_Toc81475887" class="anchor"></span>Packaging<span id="_Toc131393231" class="anchor"></span>](#9-packaging)
+    - [9.1 NVMeOF Driver Deployment Structure](#91-nvmeof-driver-deployment-structure)
+      - [9.1.1 <span id="_Toc81475889" class="anchor"></span>NvmeOfDxe - Driver Files](#911-nvmeofdxe---driver-files)
+      - [9.1.2 <span id="_Toc81475890" class="anchor"></span>NvmeOfCli - CLI Files](#912-nvmeofcli---cli-files)
+      - [9.1.3 <span id="_Toc81475891" class="anchor"></span>NvmeOf Library Files](#913-nvmeof-library-files)
   - [<span id="_Toc81475896" class="anchor"></span>Appendix](#appendix)
     - [<span id="_Toc81475897" class="anchor"></span>Cli Commands](#cli-commands)
       - [<span id="_Toc81475898" class="anchor"></span>List](#list)
@@ -794,13 +808,284 @@ This section gives details of the key structure which will be used by CLI
 | UINT64 Pattern;                                         | Pattern data       |
 | }NVMEOF\_READ\_WRITE\_DATA\_IN\_BLOCK;                  |                    |
 
-## 8 <span id="_Toc81475887" class="anchor"></span>Packaging<span id="_Toc131393231" class="anchor"></span>
+## 8. NVMe-oF UEFI HII Design
 
-### 8.1 NVMeOF Driver Deployment Structure
+The NVMe-oF HII forms will provide the primary interface for configuration of the NVMe-oF driver. Due to the similarity in driver design and configuration parameters, the NVMe-oF’s HII will be based on the iSCSI HII forms with changes made as needed.
+
+### 8.1. HII pages
+
+Example images of the below wireframes can be found in the HII behavior section.
+
+#### 8.1.1. F2 → Device Manager → NVMe-oF Configuration
+
+The main NVMe-oF configuration form will contain fields for the Host NQN, Host ID, and the list of available NVMe-oF attempts. These attempts will number from “Attempt 1” to the maximum supported attempt value as defined by PcdMaxNvmeOfAttemptNumber, defaulted to four. This list is dynamic, and modifications to the maximum supported attempt will reflect in the available attempts shown by this list.
+
+The tooltip area for each configured attempt will contain the available device path information for the highlighted attempt’s configured network device. The tooltip will also indicate if the device is not found for an existing attempt or if the attempt is not enabled.
+
+<img src="media/image043.png" style="width:6.5in;height:1.975in" />
+
+#### 8.1.2. F2 → Device Manager → NVMe-oF Configuration → Attempt \<\#\>
+
+<img src="media/image044.png" style="width:6.5in;height:3.02778in" />
+
+#### 8.1.3. F2 → Device Manager → NVMe-oF Configuration → Attempt \<\#\> → Network Device List
+
+The Network Device List form will display the MAC addresses for available network devices located by the HII. The tooltip for each MAC will indicate the path of the device. This menu supports devices preconfigured with VLAN and will display them as available selections.
+
+<img src="media/image045.png" style="width:6.5in;height:1.57708in" />
+
+### 8.2. HII configuration data
+
+The NVMe-oF HII utilizes internal data structure NVMEOF\_CONFIG\_IFR\_NVDATA for conversion between NVMe-oF driver data and the HII interface.
+
+Table 1. Variables defined in the HII’s NVMEOF\_CONFIG\_IFR\_NVDATA struct.
+
+| **Type** | **Name**                                                        | **Addtl. Info**                                                                                                                |
+| -------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+|          | **\_NVMEOF\_CONFIG\_IFR\_NVDATA {**                             |                                                                                                                                |
+| CHAR16   | NvmeofHostNqn\[NVMEOF\_NAME\_MAX\_SIZE: 224\]                   |                                                                                                                                |
+| CHAR16   | NvmeofHostId\[NVMEOF\_NID\_MAX\_LEN: 37\]                       |                                                                                                                                |
+| CHAR16   | AttemptName\[ATTEMPT\_NAME\_SIZE: 12\]                          |                                                                                                                                |
+| CHAR16   | NvmeofSubsysMacString\[NVMEOF\_MAX\_MAC\_STRING\_LEN: 96\]      |                                                                                                                                |
+| UINT8    | NvmeofSubsysSecuritySecretType                                  | Not implemented in HII outside of a data placeholder for future driver version.                                                |
+| UINT8    | Enabled                                                         | Used by the HII to display configured attempts. Not exposed as a configurable value for this reference implementation.         |
+| UINT8    | IpMode                                                          |                                                                                                                                |
+| UINT8    | ConnectRetryCount                                               |                                                                                                                                |
+| UINT8    | HostInfoDhcp                                                    |                                                                                                                                |
+| UINT8    | NvmeofSubsysInfoDhcp                                            |                                                                                                                                |
+| CHAR16   | NvmeofSubsysHostIp\[IP4\_STR\_MAX\_SIZE: 16\]                   |                                                                                                                                |
+| CHAR16   | NvmeofSubsysHostSubnetMask\[IP4\_STR\_MAX\_SIZE: 16\]           |                                                                                                                                |
+| CHAR16   | NvmeofSubsysHostGateway\[IP4\_STR\_MAX\_SIZE: 16\]              |                                                                                                                                |
+| CHAR16   | NvmeofSubsysIp\[NVMEOF\_TARGET\_URI\_MAX\_SIZE: 255\]           | If value is a valid IP string, assign to NV data’s TargetIp. Else, assign to NV data’s ServerName and set NvmeofDnsMode = TRUE |
+| UINT16   | NvmeofTargetPort                                                |                                                                                                                                |
+| CHAR16   | NvmeofSubsysNid\[NVMEOF\_NID\_MAX\_LEN: 37\]                    |                                                                                                                                |
+| CHAR16   | NvmeofSubsysNqn\[NVMEOF\_NAME\_MAX\_SIZE: 224\]                 |                                                                                                                                |
+| CHAR16   | NvmeofSubsysSecurityPath\[HOST\_SECURITY\_PATH\_MAX\_LEN: 255\] | Not implemented in HII outside of a data placeholder for future driver version.                                                |
+| UINT8    | NvmeofAuthType                                                  | Not implemented in HII outside of a data placeholder for future driver version.                                                |
+|          | **} NVMEOF\_CONFIG\_IFR\_NVDATA**                               |                                                                                                                                |
+
+#### 8.2.1.  HII data to display mapping
+
+The below table describes the mapping of variables within NVMEOF\_CONFIG\_IFR\_NVDATA to the fields shown by the NVMe-oF HII pages.
+
+Table 2. Mapping of the HII’s NVMEOF\_CONFIG\_IFR\_NVDATA struct to the display name counterparts, as well as the default values and any formatting restrictions.
+
+| **Variable name**              | **Display name**         | **Default value**                                                            | **Description**                                                                                                                                                                                                                                                                                                |
+| ------------------------------ | ------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NvmeofHostNqn                  | Host NQN                 | Blank                                                                        | “nqn.” Followed by a non-zero payload & terminated with a null-character.                                                                                                                                                                                                                                      |
+| NvmeofHostId                   | Host ID                  | Blank                                                                        | UUID format.                                                                                                                                                                                                                                                                                                   |
+| AttemptName                    | NVMe-oF Attempt Name     | Automatically configured                                                     | Formatted as “Attempt \<\#\>”                                                                                                                                                                                                                                                                                  |
+| Enabled                        | NVM Subsystem            | Disabled                                                                     | Enable/Disable the specific NVMe-oF attempt.                                                                                                                                                                                                                                                                   |
+| NvmeofSubsysMacString          | NVMe-oF Network Device   | Blank, automatically filled via user selection in “Network Device List” form | Formatted as standard or VLAN-tagged MAC string ( xx:xx:xx:xx:xx:xx or xx:xx:xx:xx:xx:xx\\000A)                                                                                                                                                                                                                |
+| IpMode                         | Internet Protocol        | IP4                                                                          | IP4, IP6, Autoconfigure                                                                                                                                                                                                                                                                                        |
+| ConnectRetryCount              | Connection Retry Count   | 3                                                                            | 0 – 16                                                                                                                                                                                                                                                                                                         |
+| HostInfoDhcp                   | Enable DHCP              | Disabled                                                                     |                                                                                                                                                                                                                                                                                                                |
+| NvmeofSubsysHostIp             | Host IP Address          | Blank                                                                        | Valid Ipv4/Ipv6 unicast address format.                                                                                                                                                                                                                                                                        |
+| NvmeofSubsysHostSubnetMask     | Host Subnet Mask         | Blank                                                                        | Only Ipv4. Valid subnet mask in dotted-decimal notation.                                                                                                                                                                                                                                                       |
+| NvmeofSubsysHostGateway        | Gateway                  | Blank                                                                        | Valid Ipv4/Ipv6 unicast address format.                                                                                                                                                                                                                                                                        |
+| NvmeofSubsysInfoDhcp           | Subsystem info from DHCP | Disabled                                                                     |                                                                                                                                                                                                                                                                                                                |
+| NvmeofSubsysNqn                | NVM Subsystem NQN        | Blank                                                                        | “nqn.” Followed by a non-zero payload terminated with a null-character.                                                                                                                                                                                                                                        |
+| NvmeofSubsysIp                 | NVM Subsystem Address    | Blank                                                                        | Valid Ipv4/Ipv6 unicast format. Failing that, treated as a URL.                                                                                                                                                                                                                                                |
+| NvmeofTargetPort               | NVM Subsystem Port       | 4420                                                                         | 0 – 65535                                                                                                                                                                                                                                                                                                      |
+| NvmeofSubsysNid                | NVM Subsystem NID        | Blank                                                                        | EUI64, NGUID, or UUID format ([NVMe base spec, section 5.17.2.3](https://nvmexpress.org/wp-content/uploads/NVM-Express-Base-Specification-2.0b-2021.12.18-Ratified.pdf) and [NVMe boot spec section 1.5.9](https://nvmexpress.org/wp-content/uploads/NVM-Express-Boot-Specification-2022.11.15-Ratified.pdf)). |
+| NvmeofAuthType                 | N/A                      | Blank                                                                        | Data placeholder.                                                                                                                                                                                                                                                                                              |
+| NvmeofSubsysSecurityPath       | N/A                      | Blank                                                                        | Data placeholder.                                                                                                                                                                                                                                                                                              |
+| NvmeofSubsysSecuritySecretType | N/A                      | Blank                                                                        | Data placeholder. See [NVMe boot spec, section 3.1.2.6 (Figure 21)](https://nvmexpress.org/wp-content/uploads/NVM-Express-Boot-Specification-2022.11.15-Ratified.pdf)   
+
+### 8.3. HII ↔ NVMe-oF driver communication
+
+The HII will convert user input into the appropriate data structures expected by the NVMe-oF driver and utilize SetVariable calls for the driver to consume. The HII will use GetVariable calls to extract and display configuration details from the driver’s NV data.
+
+The variables used by the HII for communication with the driver are NvmeofGlobalData and Nvmeof\_AttemptConfig, containing global configuration parameters and attempt configuration and subsystem connection parameters, respectively.
+
+#### 8.3.1. HII data to NVMe-oF driver data mapping
+
+The below tables map the HII’s IFR data values to the driver’s NV data structures.
+
+Table 3. Mapping the NVMEOF\_GLOBAL\_DATA variables consumed by the driver to the HII’s NVMEOF\_CONFIG\_IFR\_NVDATA structure.
+
+| **NVMEOF\_GLOBAL\_DATA{** | **NVMEOF\_CONFIG\_IFR\_NVDATA{** | Description                                                                                                 |
+| ------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| NvmeOfEnabled             | \-                               | Initialized to NVMEOF\_ENABLED during driver entry (NvmeOfCreateGlobalData). Not user configurable.         |
+| NvmeOfTargetCount         | \-                               | Set during HII save of Attempt data. Not user configurable.                                                 |
+| DriverVersion             | \-                               | Initialized to NVMEOF\_DRIVER\_VERSION during driver entry (NvmeOfCreateGlobalData). Not user configurable. |
+| NvmeofHostNqn             | NvmeofHostNqn                    | User-configured                                                                                             |
+| NvmeofHostId              | NvmeofHostId                     | User-configured                                                                                             |
+| NvmeofHostSecurityPath    | \-                               | Not used by HII as each attempt has an individual SecurityPath.                                             |
+
+Table 4. Mapping the NVMEOF\_ATTEMPT\_CONFIG\_NVDATA structure variables to the NVMEOF\_CONFIG\_IFR\_NVDATA structure.
+
+| **NVMEOF\_ATTEMPT\_CONFIG\_NVDATA{** | **NVMEOF\_CONFIG\_IFR\_NVDATA{** | Description                                                                                |
+| ------------------------------------ | -------------------------------- | ------------------------------------------------------------------------------------------ |
+| NicIndex                             | N/A                              | Internal use by NVMe-oF driver                                                             |
+| DhcpSuccess                          | N/A                              | Internal use by NVMe-oF driver                                                             |
+| ValidnBFTPath                        | N/A                              | Internal use by NVMe-oF driver                                                             |
+| ValidPath                            | N/A                              | Internal use by NVMe-oF driver                                                             |
+| AutoConfigureMode                    | N/A                              | Internal use by NVMe-oF driver                                                             |
+| AttemptName                          | AttemptName                      | Updated by HII based on the Attempt’s index in NV data (“Attempt 1, Attempt 2…”)           |
+| MacString                            | NvmeOfSubsysMacString            | User-configured                                                                            |
+| PrimaryDns                           | N/A                              | Internal use by NVMe-oF driver                                                             |
+| SecondaryDns                         | N/A                              | Internal use by NVMe-oF driver                                                             |
+| DhcpServer                           | N/A                              | Internal use by NVMe-oF driver                                                             |
+| SubsysConfigData                     | \-                               | Struct mapping defined in Table 5.                                                         |
+| NvmeofAuthType                       | NvmeofAuthType                   | Initialized with default by HII when creating a new attempt. Placeholder in HII currently. |
+| AutoConfigureSuccess                 | N/A                              | Internal use by NVMe-oF driver                                                             |
+| Actived                              | N/A                              | Internal use by NVMe-oF driver                                                             |
+
+Table 5. Mapping the NVMEOF\_SUBSYSTEM\_CONFIG\_NVDATA structure variables to the NVMEOF\_CONFIG\_IFR\_NVDATA structure.
+
+| **NVMEOF\_SUBSYSTEM\_CONFIG\_NVDATA{** | **NVMEOF\_CONFIG\_IFR\_NVDATA{** | Description                                                                                                                            |
+| -------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| NvmeofSubsysPortId                     | NvmeofTargetPort                 | Initialized with default by HII when creating a new attempt. User-configurable.                                                        |
+| Enabled                                | Enabled                          | User-configured. Enable or disable the specific NVMe-oF attempt configuration.                                                         |
+| NvmeofIpMode                           | IpMode                           | User-configured                                                                                                                        |
+| NvmeofSubsysHostIP                     | NvmeofSubsysHostIp               | User-configured                                                                                                                        |
+| NvmeofSubsysHostSubnetMask             | NvmeofSubsysHostSubnetMask       | User-configured                                                                                                                        |
+| NvmeofSubsysHostGateway                | NvmeofSubsysHostGateway          | User-configured                                                                                                                        |
+| HostInfoDhcp                           | HostInfoDhcp                     | User-configured                                                                                                                        |
+| NvmeofSubsysInfoDhcp                   | NvmeofSubsysInfoDhcp             | User-configured                                                                                                                        |
+| NvmeofSubSystemIp                      | NvmeofSubsysIp                   | User-configured. If IFR data is a valid IP string, save to NvmeofSubSystemIp. Otherwise save to ServerName.                            |
+| ServerName                             |                                  |                                                                                                                                        |
+| NvmeofPrefixLength                     | N/A                              | Internal use by NVMe-oF driver                                                                                                         |
+| NvmeofTransportPort                    | N/A                              | Internal use by NVMe-oF driver                                                                                                         |
+| NvmeofSubsysControllerId               | N/A                              | Placeholder in HII currently.                                                                                                          |
+| NvmeofSubsysNid                        | NvmeofSubsysNid                  | User-configured                                                                                                                        |
+| NvmeofSubsysNqn                        | NvmeofSubsysNqn                  | User-configured                                                                                                                        |
+| NvmeofTransportGuid                    | N/A                              | Internal use by NVMe-oF driver                                                                                                         |
+| NvmeofTimeout                          | \-                               | Initialized with default by HII when creating a new attempt. Not user configurable.                                                    |
+| NvmeofRetryCount                       | ConnectRetryCount                | Initialized with default by HII when creating a new attempt. User-configurable.                                                        |
+| NvmeofDnsMode                          | \-                               | Save as TRUE when user configuration for NvmeofSubSystemIp is an invalid IP string. FALSE otherwise. Not explicitly user configurable. |
+| NvmeofSecurityEnabled                  | N/A                              | Internal use by NVMe-oF driver                                                                                                         |
+| SecurityKeyPath                        | NvmeofSubsysSecurityPath         | Placeholder in HII currently.                                                                                                          |
+| RouteMetric                            | N/A                              | Internal use by NVMe-oF driver                                                                                                         |
+| HostName                               | N/A                              | Internal use by NVMe-oF driver                                                                                                         |
+| NvmeofHostNqnOverride                  | N/A                              | Internal use by NVMe-oF driver                                                                                                         |
+| NvmeofHostIdOverride                   | N/A                              | Internal use by NVMe-oF driver                                                                                                         |
+| HostOverrideEnable                     | N/A                              | Internal use by NVMe-oF driver                                                                                                         |
+
+### 8.4 HII Behavior
+
+The example images below are meant to provide a sample of the applied wireframes from the HII Pages section.
+
+#### 8.4.1. Devices List→NVMe-oF entry
+
+<img src="media/image046.png" style="width:4.33333in;height:3.25in" />
+
+Figure 1. Main form entry for NVMe-oF configuration.
+
+#### 8.4.2. NVMe-oF main form, non-configured
+
+The main NVMe-oF configuration form contains fields for Host NQN, Host ID, and a dynamically created list of available attempts from “Attempt 1” to the maximum value defined by PcdMaxNvmeOfAttemptNumber.
+
+<img src="media/image047.png" style="width:4.3284in;height:3.25in" />
+
+Figure 2. NVMe-oF configuration menu entry. Attempts forms are dynamically created up to the maximum number of attempts as defined by PcdMaxNvmeOfAttemptNumber.
+
+#### 8.4.3. NVMe-oF configuration: attempt form entry
+
+The list of available attempts will display both enabled and disabled attempts. An attempt’s tooltip will indicate disabled attempts.
+
+<img src="media/image048.png" style="width:4.36755in;height:3.25in" />
+
+Figure 3. Configuration form entry for a disabled attempt. The tooltip for such attempts will indicate if the attempt is not enabled.
+
+<img src="media/image049.png" style="width:4.37509in;height:3.25in" />
+
+Figure 4. Configuration form upon entry to an attempt. (1/2)
+
+To prevent inadvertent or accidental attempt configuration changes, each attempt contains a “Save Changes” button. Any changes made to an attempt must be saved on their respective form – otherwise they will be lost on reset (or on alternate attempt saves).
+
+<img src="media/image050.png" style="width:4.31551in;height:3.25in" />
+
+Figure 5. Configuration form for an attempt, end of page. (2/2)
+
+##### 8.4.3.1. NVMe-oF configuration: network device list
+
+Under each attempt, the form link for “Network Device List” operates in the same way as the main “Device Manager-\>Network Device List”. All network-capable devices detected by the system will have their MAC addresses listed here and be available for selection.
+
+<img src="media/image051.png" style="width:4.34013in;height:3.25in" />
+
+Figure 6. Network device list form link located on the NVMe-oF attempt configuration form.
+
+<img src="media/imag052.png" style="width:4.39278in;height:3.25in" />
+
+Figure 7. Entering the Network Device List menu. This image shows 3 standard MAC strings and a VLAN-configured MAC available for selection. Note that VLAN must be preconfigured for a given network device before it is available for selection.
+
+<img src="media/image053.png" style="width:4.31061in;height:3.25in" />
+
+Figure 8. Selecting the NIC with a VLAN ID of 255.
+
+Once a device is chosen from the network device list, the “NVMe-oF Network Device” field will be updated to reflect the selected MAC address (including any VLAN-tagging).
+
+<img src="media/image054.png" style="width:4.3358in;height:3.25in" />
+
+Figure 9. The selected network device MAC string is updated in the NVMe-oF attempt configuration menu.
+
+##### 8.4.3.2. NVMe-oF configuration: network protocol
+
+<img src="media/image055.png" style="width:4.33333in;height:3.25in" />
+
+Figure 10. Internet Protocol default configuration using the Ipv4 stack.
+
+The “Internet Protocol” field must have a valid network device selected to change to “IP6” mode. If the network device does not support IPv6, the field will revert to “IP4”.
+
+<img src="media/image056.png" style="width:4.28632in;height:3.25in" />
+
+Figure 9. Internet Protocol configured to use the Ipv6 stack. To select the IP6 protocol a supported network device must first be selected.
+
+If “Autoconfigure” is selected for the protocol, most network configuration options are hidden.
+
+<img src="media/image057.png" style="width:4.34447in;height:3.25in" />
+
+Figure 10. Internet Protocol set to Autoconfigure.
+
+##### 8.4.3.3. NVMe-oF configuration: DHCP
+
+DHCP has two primary toggles in the attempt forms – one for using DHCP on the host system, and one for locating NVMe-oF subsystem information via DHCP.
+
+<img src="media/image058.png" style="width:4.31734in;height:3.25in" />
+
+Figure 11. DHCP enabled for Host. Host networking fields are hidden. "Subsytem info from DHCP" field is now accessible.
+
+<img src="media/image059.png" style="width:4.34696in;height:3.25in" />
+
+Figure 12. Toggling Subsystem DHCP. Subsystem networking fields are hidden. NVM Subsystem NID still available to be configured.
+
+#### 8.4.4. NVMe-oF example configuration
+
+<img src="media/image060.png" style="width:4.38202in;height:3.25in" />
+
+Figure 13. NVMe-oF main form after configuring the available fields.
+
+<img src="media/image061.png" style="width:4.32902in;height:3.25in" />
+
+Figure 14. Configuring "Attempt 1" (1/2).
+
+<img src="media/image062.png" style="width:4.33333in;height:3.25in" />
+
+Figure 15. Configuring "Attempt 1" (2/2).
+
+<img src="media/image063.png" style="width:4.35442in;height:3.25in" />
+
+Figure 16. NVMe-oF configuration main form after configuring the attempt. The Attempt’s tooltip shows the network device path.
+
+<img src="media/image064.png" style="width:4.27547in;height:3.25in" />
+
+Figure 17. Boot manager displays NVMeOF devices for configured attempts after reset.
+
+##### 8.4.4.1. NVMe-oF example configuration: configured NIC removed
+
+<img src="media/image065.png" style="width:4.3284in;height:3.25in" />
+
+Figure 21. Configured "Attempt 3” with an available network device. Once the configuration was saved, the NIC was removed, and the system was reset. The tooltip reflects this change while still allowing access to the attempt to modify the configuration.
+
+## 9 <span id="_Toc81475887" class="anchor"></span>Packaging<span id="_Toc131393231" class="anchor"></span>
+
+### 9.1 NVMeOF Driver Deployment Structure
 
 The NVMe-oF driver source resides in new a directory called “NVMeOfDxe”. The following section details all the files which are expected in the Driver, Library and CLI directories.
 
-#### 8.1.1 <span id="_Toc81475889" class="anchor"></span>NvmeOfDxe - Driver Files
+#### 9.1.1 <span id="_Toc81475889" class="anchor"></span>NvmeOfDxe - Driver Files
 
 | **Entity name**      | **Purpose**                                                                                  |
 |----------------------|----------------------------------------------------------------------------------------------|
@@ -831,7 +1116,7 @@ The NVMe-oF driver source resides in new a directory called “NVMeOfDxe”. The
 | NvmeOfDHCP6.h        | Header file for NvmeOfDHCP6.c                                                                |
 | NvmeOfDxe.uni        | string identifier description                                                                |
 
-#### 8.1.2 <span id="_Toc81475890" class="anchor"></span>NvmeOfCli - CLI Files
+#### 9.1.2 <span id="_Toc81475890" class="anchor"></span>NvmeOfCli - CLI Files
 
 | **Entity name**    | **Purpose**                                                                                                      |
 |--------------------|------------------------------------------------------------------------------------------------------------------|
@@ -848,7 +1133,7 @@ The NVMe-oF driver source resides in new a directory called “NVMeOfDxe”. The
 | NvmeOfCli.uni      | string identifier description                                                                                    |
 | config             | Sample single attempt config file                                                                                |
 
-#### 8.1.3 <span id="_Toc81475891" class="anchor"></span>NvmeOf Library Files
+#### 9.1.3 <span id="_Toc81475891" class="anchor"></span>NvmeOf Library Files
 
 DxeNvmeOfLib files are ported from SPDK Nvme lib
 
