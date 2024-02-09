@@ -577,11 +577,16 @@ NvmeOfDoDhcp (
   IN OUT NVMEOF_ATTEMPT_CONFIG_NVDATA  *ConfigData
   )
 {
-  EFI_HANDLE                      Dhcp4Handle;
-  EFI_IP4_CONFIG2_PROTOCOL        *Ip4Config2;
-  EFI_DHCP4_PROTOCOL              *Dhcp4;
-  EFI_STATUS                      Status;
-  EFI_DHCP4_PACKET_OPTION         *ParaList;
+  EFI_HANDLE                Dhcp4Handle;
+  EFI_IP4_CONFIG2_PROTOCOL  *Ip4Config2;
+  EFI_DHCP4_PROTOCOL        *Dhcp4;
+  EFI_STATUS                Status;
+  EFI_DHCP4_PACKET_OPTION   *OptList[2];                                         // DHCP4_TAG_PARA_LIST(55) and DHCP4_TAG_CLIENT_ID(61)
+  UINT8                     OptBuffer[(sizeof (EFI_DHCP4_PACKET_OPTION)-1) * 2 + // 2 DHCP Options without Data[1]
+                                      4 +                                        // DHCP4_TAG_PARA_LIST->Data size
+                                      1 + sizeof (EFI_MAC_ADDRESS)];             // DHCP4_TAG_CLIENT_ID->Data size(Type + MAC)
+  EFI_MAC_ADDRESS                 MacAddr;
+  UINTN                           HwAddrSize = 0;
   EFI_DHCP4_CONFIG_DATA           Dhcp4ConfigData;
   NVMEOF_SUBSYSTEM_CONFIG_NVDATA  *NvData;
   EFI_STATUS                      MediaStatus;
@@ -589,7 +594,6 @@ NvmeOfDoDhcp (
   Dhcp4Handle = NULL;
   Ip4Config2  = NULL;
   Dhcp4       = NULL;
-  ParaList    = NULL;
 
   //
   // Check media status before doing DHCP.
@@ -643,25 +647,34 @@ NvmeOfDoDhcp (
 
   NvData = &ConfigData->SubsysConfigData;
 
-  ParaList = AllocatePool (sizeof (EFI_DHCP4_PACKET_OPTION) + 3);
-  if (ParaList == NULL) {
-    Status = EFI_OUT_OF_RESOURCES;
-    goto ON_EXIT;
+  //
+  // DHCP Option 55 - Parameter List
+  // Ask the server to reply with Netmask(1), Router(3), DNS(6), and RootPath(17) options.
+  //
+  OptList[0]          = (EFI_DHCP4_PACKET_OPTION *)OptBuffer;
+  OptList[0]->OpCode  = DHCP4_TAG_PARA_LIST;
+  OptList[0]->Length  = (UINT8)(NvData->NvmeofSubsysInfoDhcp ? 4 : 3);
+  OptList[0]->Data[0] = DHCP4_TAG_NETMASK;
+  OptList[0]->Data[1] = DHCP4_TAG_ROUTER;
+  OptList[0]->Data[2] = DHCP4_TAG_DNS_SERVER;
+  OptList[0]->Data[3] = DHCP4_TAG_ROOTPATH;
+
+  //
+  // DHCP Option 61 - Client Identifier
+  // Most DHCP server uses this Option to assign IP, add here so that IP is more likely to be the same as OS.
+  //
+  Status = NetLibGetMacAddress (Controller, &MacAddr, &HwAddrSize);
+  if (!EFI_ERROR (Status)  && (0 != HwAddrSize)) {
+    OptList[1]          = (EFI_DHCP4_PACKET_OPTION *)(OptBuffer + sizeof (EFI_DHCP4_PACKET_OPTION) + OptList[0]->Length - 1);
+    OptList[1]->OpCode  = DHCP4_TAG_CLIENT_ID;
+    OptList[1]->Length  = HwAddrSize + 1;       // +1 for hardware type(NET_IFTYPE+ETHERNET)
+    OptList[1]->Data[0] = NET_IFTYPE_ETHERNET;
+    CopyMem (OptList[1]->Data + 1, &MacAddr, HwAddrSize);
   }
 
-  //
-  // Ask the server to reply with Netmask, Router, DNS, and RootPath options.
-  //
-  ParaList->OpCode  = DHCP4_TAG_PARA_LIST;
-  ParaList->Length  = (UINT8)(NvData->NvmeofSubsysInfoDhcp ? 4 : 3);
-  ParaList->Data[0] = DHCP4_TAG_NETMASK;
-  ParaList->Data[1] = DHCP4_TAG_ROUTER;
-  ParaList->Data[2] = DHCP4_TAG_DNS_SERVER;
-  ParaList->Data[3] = DHCP4_TAG_ROOTPATH;
-
   ZeroMem (&Dhcp4ConfigData, sizeof (EFI_DHCP4_CONFIG_DATA));
-  Dhcp4ConfigData.OptionCount = 1;
-  Dhcp4ConfigData.OptionList  = &ParaList;
+  Dhcp4ConfigData.OptionCount = 2;
+  Dhcp4ConfigData.OptionList  = OptList;
 
   if (NvData->NvmeofSubsysInfoDhcp) {
     //
@@ -687,10 +700,6 @@ NvmeOfDoDhcp (
   Status = NvmeOfParseDhcpAck (Dhcp4, ConfigData);
 
 ON_EXIT:
-
-  if (ParaList != NULL) {
-    FreePool (ParaList);
-  }
 
   if (Dhcp4 != NULL) {
     Dhcp4->Stop (Dhcp4);
