@@ -211,8 +211,8 @@ formset
     endstring;
 
     numeric varid   = NVMEOF_CONFIG_IFR_NVDATA.NvmeofSubsysControllerId,
-            prompt  = STRING_TOKEN(STR_NVMEOF_CONFIG_CONTROLLER_ID),
-            help    = STRING_TOKEN(STR_NVMEOF_CONFIG_CONTROLLER_ID_HELP),
+            prompt  = STRING_TOKEN(STR_NVMEOF_SUBSYS_CONTROLLER_ID),
+            help    = STRING_TOKEN(STR_NVMEOF_SUBSYS_CONTROLLER_ID_HELP),
             flags   = 0,
             minimum = NVMEOF_CONTROLLER_ID_MIN,
             maximum = NVMEOF_CONTROLLER_ID_MAX,
