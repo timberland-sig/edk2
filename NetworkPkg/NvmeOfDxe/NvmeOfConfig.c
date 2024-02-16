@@ -503,10 +503,11 @@ NvmeOfConfigUpdateAttemptInfoList (
       NewAttempt                 = &AttemptInfo->Data;
       NewAttempt->NvmeofAuthType = NVMEOF_AUTH_TYPE_NONE;
 
-      SubsysConfigData                     = &NewAttempt->SubsysConfigData;
-      SubsysConfigData->NvmeofSubsysPortId = SUBSYS_PORT_DEFAULT;
-      SubsysConfigData->NvmeofTimeout      = CONNECT_DEFAULT_TIMEOUT;
-      SubsysConfigData->NvmeofRetryCount   = CONNECT_DEFAULT_RETRY;
+      SubsysConfigData                           = &NewAttempt->SubsysConfigData;
+      SubsysConfigData->NvmeofSubsysPortId       = SUBSYS_PORT_DEFAULT;
+      SubsysConfigData->NvmeofTimeout            = CONNECT_DEFAULT_TIMEOUT;
+      SubsysConfigData->NvmeofRetryCount         = CONNECT_DEFAULT_RETRY;
+      SubsysConfigData->NvmeofSubsysControllerId = NVMEOF_CONTROLLER_ID_DEFAULT;
     }
 
     //
@@ -984,10 +985,11 @@ NvmeOfConvertAttemptConfigDataToIfrNvData (
   SubsysConfigData  = &Attempt->SubsysConfigData;
   IfrNvData->IpMode = SubsysConfigData->NvmeofIpMode;
 
-  IfrNvData->HostInfoDhcp         = SubsysConfigData->HostInfoDhcp;
-  IfrNvData->NvmeofSubsysInfoDhcp = SubsysConfigData->NvmeofSubsysInfoDhcp;
-  IfrNvData->NvmeofTargetPort     = SubsysConfigData->NvmeofSubsysPortId;
-  IfrNvData->ConnectRetryCount    = SubsysConfigData->NvmeofRetryCount;
+  IfrNvData->HostInfoDhcp             = SubsysConfigData->HostInfoDhcp;
+  IfrNvData->NvmeofSubsysInfoDhcp     = SubsysConfigData->NvmeofSubsysInfoDhcp;
+  IfrNvData->NvmeofTargetPort         = SubsysConfigData->NvmeofSubsysPortId;
+  IfrNvData->ConnectRetryCount        = SubsysConfigData->NvmeofRetryCount;
+  IfrNvData->NvmeofSubsysControllerId = SubsysConfigData->NvmeofSubsysControllerId;
 
   AsciiStrToUnicodeStrS (
     Attempt->MacString,
@@ -1136,9 +1138,10 @@ NvmeOfConvertIfrNvDataToAttemptConfigData (
     NVMEOF_MAX_MAC_STRING_LEN
     );
 
-  SubsysConfigData                   = &Attempt->SubsysConfigData;
-  SubsysConfigData->NvmeofRetryCount = IfrNvData->ConnectRetryCount;
-  SubsysConfigData->NvmeofIpMode     = IfrNvData->IpMode;
+  SubsysConfigData                           = &Attempt->SubsysConfigData;
+  SubsysConfigData->NvmeofRetryCount         = IfrNvData->ConnectRetryCount;
+  SubsysConfigData->NvmeofIpMode             = IfrNvData->IpMode;
+  SubsysConfigData->NvmeofSubsysControllerId = IfrNvData->NvmeofSubsysControllerId;
 
   switch (IfrNvData->IpMode) {
     case IP_MODE_AUTOCONFIG:

@@ -64,6 +64,8 @@
 #string STR_NVMEOF_SUBSYS_PORT                    #language en-US "  NVM Subsystem Port"
 #string STR_NVMEOF_SUBSYS_NID                     #language en-US "NVM Subsystem NID"
 #string STR_NVMEOF_SUBSYS_NID_HELP                #language en-US "The NVM Subsystem's Namespace Identifier in either NVMe EUI-64, NVMe NGUID, or NVMe UUID string formats with respective prefixes \"eui:\", \"nvme-nguid:\", or \"urn:uuid:\"."
+#string STR_NVMEOF_CONFIG_CONTROLLER_ID           #language en-US "NVM Subsystem Controller ID"
+#string STR_NVMEOF_CONFIG_CONTROLLER_ID_HELP      #language en-US "Requested controller ID for the NVMe-oF attempt configuration."
 #string STR_AUTHEN_TYPE_PROMPT                    #language en-US "Authentication Type"
 #string STR_AUTHEN_TYPE_HELP                      #language en-US "Authentication method: DH-HMAC-CHAP or None"
 #string STR_AUTHEN_TYPE_CHAP                      #language en-US "DH-HMAC-CHAP"
