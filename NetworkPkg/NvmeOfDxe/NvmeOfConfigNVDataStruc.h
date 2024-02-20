@@ -1,7 +1,7 @@
 /** @file
   Define NVData structures used by the NVMe-oF configuration component.
 
-Copyright (c) 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2023 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/

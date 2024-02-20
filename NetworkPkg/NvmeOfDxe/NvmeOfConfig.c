@@ -1,7 +1,7 @@
 /** @file
   Helper functions for configuring or getting the parameters relating to NVMe-oF.
 
-Copyright (c) 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2023 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
