@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - timberland_1.0_final
+      - timberland_upstream-dev-full
 
 jobs:
   build:
