@@ -1,7 +1,7 @@
 /** @file
   Define NVData structures used by the NVMe-oF configuration component.
 
-Copyright (c) 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2023 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -33,6 +33,10 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #define NVMEOF_NID_GUID_STR   "nvme-nguid:"
 #define NVMEOF_NID_UUID_LEN   37
 #define NVMEOF_NID_UUID_STR   "urn:uuid:"
+
+#define NVMEOF_CONTROLLER_ID_MIN      0
+#define NVMEOF_CONTROLLER_ID_MAX      65534
+#define NVMEOF_CONTROLLER_ID_DEFAULT  0
 
 #define ATTEMPT_NAME_SIZE  12
 
@@ -136,7 +140,7 @@ typedef struct _NVMEOF_CONFIG_IFR_NVDATA {
   UINT16    NvmeofTargetPort;
   CHAR16    NvmeofSubsysNid[NVMEOF_NID_MAX_LEN];
 
-  CHAR16    NvmeofSubsysControllerId;
+  UINT16    NvmeofSubsysControllerId;
   // Subsystem or discovery controller NQN
   CHAR16    NvmeofSubsysNqn[NVMEOF_NAME_MAX_SIZE];
 
