@@ -1,7 +1,7 @@
 /** @file
   Implementation for NVMeOF Boot Firmware Table publication.
 
-  Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+  Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
   Copyright (c) 2022 - 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -750,8 +750,18 @@ NvmeOfFillSubsystemNamespaceSection (
     NvmeOfAddHeapItem (Heap, gNvmeOfNbftList[Index].Device->NameSpace->ctrlr->trid.subnqn, Len);
     SubsystemNamespace->SubsystemNamespaceNqnLen = Len;
 
+    //
     // Controller ID
-    SsnsExtInfo.ControllerId = gNvmeOfNbftList[Index].Device->NameSpace->ctrlr->cntlid;
+    // As per NVM Express Boot Specification, if Controller ID is not
+    // administratively specified or direct configuration is not supported,
+    // clear Controller ID in NBFT to 0.
+    //
+    if (gNvmeOfNbftList[Index].AttemptData->SubsysConfigData.NvmeofSubsysControllerId != NVMEOF_CONTROLLER_ID_DEFAULT) {
+      SsnsExtInfo.ControllerId = gNvmeOfNbftList[Index].Device->NameSpace->ctrlr->cntlid;
+    } else {
+      SsnsExtInfo.ControllerId = NVMEOF_CONTROLLER_ID_DEFAULT;
+    }
+
     if (gNvmeOfNbftList[Index].IsDiscoveryNqn) {
       // ASQSZ
       SsnsExtInfo.Asqsz = gNvmeOfNbftList[Index].Device->Asqsz;
