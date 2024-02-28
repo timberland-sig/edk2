@@ -1,7 +1,7 @@
 /** @file
   VFR file used by the NVMe-oF configuration component.
 
-Copyright (c) 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2023 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -209,6 +209,15 @@ formset
             minsize = NVMEOF_NID_IFR_MIN_SIZE,
             maxsize = NVMEOF_NID_IFR_MAX_SIZE,
     endstring;
+
+    numeric varid   = NVMEOF_CONFIG_IFR_NVDATA.NvmeofSubsysControllerId,
+            prompt  = STRING_TOKEN(STR_NVMEOF_SUBSYS_CONTROLLER_ID),
+            help    = STRING_TOKEN(STR_NVMEOF_SUBSYS_CONTROLLER_ID_HELP),
+            flags   = 0,
+            minimum = NVMEOF_CONTROLLER_ID_MIN,
+            maximum = NVMEOF_CONTROLLER_ID_MAX,
+            step    = 0,
+    endnumeric;
 
     subtitle text = STRING_TOKEN(STR_NULL);
 
