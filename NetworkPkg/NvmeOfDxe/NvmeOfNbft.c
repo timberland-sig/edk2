@@ -584,7 +584,6 @@ NvmeOfFillSubsystemNamespaceSection (
   EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_NAMESPACE_DESCRIPTOR  *SubsystemNamespace;
   EFI_ACPI_NVMEOF_BFT_CONTROL_STRUCTURE               *Control;
   EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_EXT_INFO_DESCRIPTOR   SsnsExtInfo = { 0 };
-  EFI_ACPI_NVMEOF_BFT_HFI_HEADER_DESCRIPTOR           *HfiHeader;
   UINTN                                               DeviceIndex = 0;
   UINT8                                               Index;
   LIST_ENTRY                                          *ProcessedEntry;
@@ -598,8 +597,6 @@ NvmeOfFillSubsystemNamespaceSection (
   SubsystemNamespace = (EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_NAMESPACE_DESCRIPTOR *)((UINTN)Table +
                                                                               Control->HfiDescOffset +
                                                                               (Control->NumHfis * NBFT_ROUNDUP (sizeof (EFI_ACPI_NVMEOF_BFT_HFI_HEADER_DESCRIPTOR))));
-  HfiHeader = (EFI_ACPI_NVMEOF_BFT_HFI_HEADER_DESCRIPTOR *)((UINTN)Table +
-                                                            Control->HostDescOffset + NBFT_ROUNDUP (sizeof (EFI_ACPI_NVMEOF_BFT_HOST_DESCRIPTOR)));
 
   // Fill the offset of 1st namespace structure in control structure
   Control->SubSytemDescOffset = (UINT16)((UINTN)SubsystemNamespace - (UINTN)Table);
@@ -667,7 +664,7 @@ NvmeOfFillSubsystemNamespaceSection (
       Len                                                   = AsciiStrLen (gNvmeOfNbftList[Index].FailTridInfo->trsvcid);
       SubsystemNamespace->SubsystemTransportServiceIdLength = Len;
       NvmeOfAddHeapItem (Heap, gNvmeOfNbftList[Index].FailTridInfo->trsvcid, Len);
-      SubsystemNamespace->PrimaryHfiDescriptorIndex = HfiHeader->Index;
+      SubsystemNamespace->PrimaryHfiDescriptorIndex = gNvmeOfNbftList[Index].DeviceAdapterIndex;
       // HFI association
       NvmeOfAddHeapItem (Heap, &(gNvmeOfNbftList[Index].DeviceAdapterIndex), sizeof (UINT8));
       // Fill the subsystem NQN into the heap.
@@ -740,7 +737,7 @@ NvmeOfFillSubsystemNamespaceSection (
       sizeof (SubsystemNamespace->Nid)
       );
 
-    SubsystemNamespace->PrimaryHfiDescriptorIndex = HfiHeader->Index;
+    SubsystemNamespace->PrimaryHfiDescriptorIndex = gNvmeOfNbftList[Index].DeviceAdapterIndex;
     // HFI association
     NvmeOfAddHeapItem (Heap, &(gNvmeOfNbftList[Index].DeviceAdapterIndex), sizeof (UINT8));
     SubsystemNamespace->HfiAssociationLen = sizeof (UINT8);
