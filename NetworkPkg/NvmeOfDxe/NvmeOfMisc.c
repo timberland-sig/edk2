@@ -1,7 +1,7 @@
 /** @file
   Miscellaneous routines for NVMeOF driver.
 
-  Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+  Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
   Copyright (c) 2022 - 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -1999,6 +1999,7 @@ NvmeOfInitializeGlobalNvData (
 {
   NVMEOF_GLOBAL_DATA  *NvmeOfGlobalData;
   EFI_GUID            *SystemGuid;
+  EFI_GUID            HostIdGuid;
   EFI_STATUS          Status = EFI_SUCCESS;
   UINTN               Size;
 
@@ -2050,9 +2051,19 @@ NvmeOfInitializeGlobalNvData (
     if (  (NvmeOfGlobalData->NvmeofHostId[0] == '\0')
        && !IsZeroGuid (SystemGuid))
     {
+      // Convert EFI_GUID to little-endian and store as NvmeofHostId
+      HostIdGuid.Data1 = SwapBytes32 (SystemGuid->Data1);
+      HostIdGuid.Data2 = SwapBytes16 (SystemGuid->Data2);
+      HostIdGuid.Data3 = SwapBytes16 (SystemGuid->Data3);
+      CopyMem (
+        &(HostIdGuid.Data4),
+        SystemGuid->Data4,
+        sizeof (SystemGuid->Data4)
+        );
+
       CopyMem (
         NvmeOfGlobalData->NvmeofHostId,
-        SystemGuid,
+        &HostIdGuid,
         sizeof (NvmeOfGlobalData->NvmeofHostId)
         );
     }
@@ -2060,6 +2071,7 @@ NvmeOfInitializeGlobalNvData (
     if (  (NvmeOfGlobalData->NvmeofHostNqn[0] == '\0')
        && !IsZeroGuid (SystemGuid))
     {
+      // We can use EFI_GUID directly here, the format string will handle conversion
       AsciiSPrint (
         NvmeOfGlobalData->NvmeofHostNqn,
         sizeof (NvmeOfGlobalData->NvmeofHostNqn),

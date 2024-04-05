@@ -848,6 +848,10 @@ NvmeOfCliSetAttempt (
       } else if (!AsciiStriCmp (Tag, "HostId")) {
         AsciiStrToUnicodeStrS (Line, HostIdStr, NVMEOF_NID_LEN);
         if (StrToGuid (HostIdStr, &HostRawGuid) == RETURN_SUCCESS) {
+          // Convert EFI_GUID to little-endian
+          HostRawGuid.Data1 = SwapBytes32 (HostRawGuid.Data1);
+          HostRawGuid.Data2 = SwapBytes16 (HostRawGuid.Data2);
+          HostRawGuid.Data3 = SwapBytes16 (HostRawGuid.Data3);
           CopyMem (NvmeofData[0].NvmeofHostId, &HostRawGuid, sizeof (HostRawGuid));
         } else {
           Print (L"Invalid HostGUID format\n");
@@ -882,6 +886,10 @@ NvmeOfCliSetAttempt (
       } else if (!AsciiStriCmp (Tag, "HostIdOverride")) {
         AsciiStrToUnicodeStrS (Line, HostIdStr, NVMEOF_NID_LEN);
         if (StrToGuid (HostIdStr, &HostRawGuid) == RETURN_SUCCESS) {
+          // Convert EFI_GUID to little-endian
+          HostRawGuid.Data1 = SwapBytes32 (HostRawGuid.Data1);
+          HostRawGuid.Data2 = SwapBytes16 (HostRawGuid.Data2);
+          HostRawGuid.Data3 = SwapBytes16 (HostRawGuid.Data3);
           CopyMem (Nvmeof_Attemptconfig[i].SubsysConfigData.NvmeofHostIdOverride, &HostRawGuid, sizeof (HostRawGuid));
         }
       } else if (!AsciiStriCmp (Tag, "HostOverrideEnable")) {
