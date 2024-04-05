@@ -1541,6 +1541,7 @@ NvmeOfFormExtractConfig (
   EFI_STRING                 ConfigRequest;
   BOOLEAN                    AllocatedRequest;
   UINTN                      Size;
+  EFI_GUID                   HostIdAsGuid;
 
   if ((This == NULL) || (Progress == NULL) || (Results == NULL)) {
     return EFI_INVALID_PARAMETER;
@@ -1582,11 +1583,21 @@ NvmeOfFormExtractConfig (
       );
 
     if (!IsZeroGuid ((EFI_GUID *)NvmeOfGlobalData->NvmeofHostId)) {
+      // Use NvmeofHostId in EFI_GUID format for format string compatibility
+      CopyMem (
+        &HostIdAsGuid,
+        (EFI_GUID *)NvmeOfGlobalData->NvmeofHostId,
+        sizeof (HostIdAsGuid)
+        );
+      HostIdAsGuid.Data1 = SwapBytes32 (HostIdAsGuid.Data1);
+      HostIdAsGuid.Data2 = SwapBytes16 (HostIdAsGuid.Data2);
+      HostIdAsGuid.Data3 = SwapBytes16 (HostIdAsGuid.Data3);
+
       UnicodeSPrint (
         IfrNvData->NvmeofHostId,
         sizeof (IfrNvData->NvmeofHostId),
         L"%g",
-        NvmeOfGlobalData->NvmeofHostId
+        &HostIdAsGuid
         );
     }
 
@@ -1793,6 +1804,7 @@ NvmeOfFormCallback (
   CHAR16                     MacString[NVMEOF_MAX_MAC_STRING_LEN];
   NVMEOF_CONFIG_NIC_INFO     *NicInfo;
   LIST_ENTRY                 *Entry;
+  EFI_GUID                   HostIdGuid;
 
   if ((Action == EFI_BROWSER_ACTION_FORM_OPEN) && mCallbackInfo->InitialFormLoad) {
     //
@@ -1896,9 +1908,10 @@ NvmeOfFormCallback (
             NVMEOF_NAME_MAX_SIZE
             );
         } else if (QuestionId == KEY_HOST_ID) {
+          // Check HostId format for valid GUID
           Status = StrToGuid (
                      IfrNvData->NvmeofHostId,
-                     (EFI_GUID *)NvmeOfGlobalData->NvmeofHostId
+                     &HostIdGuid
                      );
           if (EFI_ERROR (Status)) {
             CreatePopUp (
@@ -1910,6 +1923,17 @@ NvmeOfFormCallback (
             FreePool (NvmeOfGlobalData);
             break;
           }
+
+          // Convert EFI_GUID to little-endian and store as NvmeofHostId
+          HostIdGuid.Data1 = SwapBytes32 (HostIdGuid.Data1);
+          HostIdGuid.Data2 = SwapBytes16 (HostIdGuid.Data2);
+          HostIdGuid.Data3 = SwapBytes16 (HostIdGuid.Data3);
+
+          CopyMem (
+            NvmeOfGlobalData->NvmeofHostId,
+            &HostIdGuid,
+            sizeof (NvmeOfGlobalData->NvmeofHostId)
+            );
         }
 
         Status = gRT->SetVariable (

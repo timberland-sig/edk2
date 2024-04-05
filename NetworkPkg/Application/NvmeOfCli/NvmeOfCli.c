@@ -1,7 +1,7 @@
 /** @file
   NvmeOf CLI is used to test NVMeOF Driver
 
-Copyright (c) 2020 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.
+Copyright (c) 2020 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.
 Copyright (c) 2022, Intel Corporation. All rights reserved.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
@@ -847,6 +847,10 @@ NvmeOfCliSetAttempt (
       } else if (!AsciiStriCmp (Tag, "HostId")) {
         AsciiStrToUnicodeStrS (Line, HostIdStr, NVMEOF_NID_LEN);
         if (StrToGuid (HostIdStr, &HostRawGuid) == RETURN_SUCCESS) {
+          // Convert EFI_GUID to little-endian
+          HostRawGuid.Data1 = SwapBytes32 (HostRawGuid.Data1);
+          HostRawGuid.Data2 = SwapBytes16 (HostRawGuid.Data2);
+          HostRawGuid.Data3 = SwapBytes16 (HostRawGuid.Data3);
           CopyMem (NvmeofData[0].NvmeofHostId, &HostRawGuid, sizeof (HostRawGuid));
         } else {
           Print (L"Invalid HostGUID format\n");
@@ -881,6 +885,10 @@ NvmeOfCliSetAttempt (
       } else if (!AsciiStriCmp (Tag, "HostIdOverride")) {
         AsciiStrToUnicodeStrS (Line, HostIdStr, NVMEOF_NID_LEN);
         if (StrToGuid (HostIdStr, &HostRawGuid) == RETURN_SUCCESS) {
+          // Convert EFI_GUID to little-endian
+          HostRawGuid.Data1 = SwapBytes32 (HostRawGuid.Data1);
+          HostRawGuid.Data2 = SwapBytes16 (HostRawGuid.Data2);
+          HostRawGuid.Data3 = SwapBytes16 (HostRawGuid.Data3);
           CopyMem (Nvmeof_Attemptconfig[i].SubsysConfigData.NvmeofHostIdOverride, &HostRawGuid, sizeof (HostRawGuid));
         }
       } else if (!AsciiStriCmp (Tag, "HostOverrideEnable")) {
