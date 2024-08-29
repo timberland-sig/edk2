@@ -2,7 +2,7 @@
   NvmeOfDxe driver is used to manage non-volatile memory subsystem which follows
   NVM Express Over Fabric TCP specification.
 
-  Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+  Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
   Copyright (c) 2022 - 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -293,7 +293,8 @@ extern NVMEOF_NQN_NID  gNvmeOfNqnNidMap[];
 extern UINT8           NqnNidMapINdex;
 
 typedef struct _NVMEOF_NBFT {
-  UINT8                            DeviceAdapterIndex;
+  UINT8                            PrimaryHfiIndex;
+  UINT8                            PrimaryDiscoveryCtlrIndex;
   BOOLEAN                          IsDiscoveryNqn;
   NVMEOF_DEVICE_PRIVATE_DATA       *Device;
   NVMEOF_ATTEMPT_CONFIG_NVDATA     *AttemptData;
