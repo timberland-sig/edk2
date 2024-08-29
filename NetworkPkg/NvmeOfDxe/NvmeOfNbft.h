@@ -1,7 +1,7 @@
 /** @file
   Function definitions for nBFT.
 
-  Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+  Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
   Copyright (c) 2022, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -35,7 +35,8 @@ typedef struct {
   CHAR8                                        MacString[NVMEOF_MAX_MAC_STRING_LEN];
   BOOLEAN                                      HostOverrideEnable;
   EFI_ACPI_NVMEOF_BFT_HFI_HEADER_DESCRIPTOR    *HfiHeaderRef;
-} NVMEOF_PROCESSED_MAC;
+  UINTN                                        HfiTrDescriptorHash;
+} NVMEOF_PROCESSED_HFI;
 
 typedef struct {
   LIST_ENTRY    Link;
@@ -50,6 +51,7 @@ typedef struct {
 
 typedef struct {
   UINT8             AdapterIndex;
+  UINT8             PrimaryHfiIndex;
   BOOLEAN           Ipv6Flag;
   UINT8             SecurityProfileIndex;
   UINT16            Port;
