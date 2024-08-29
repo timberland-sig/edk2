@@ -389,14 +389,14 @@ NvmeOfFillHostFabricInterfaceSections (
   NVMEOF_ATTEMPT_ENTRY                                   *AttemptEntry;
   NVMEOF_ATTEMPT_CONFIG_NVDATA                           *Attempt;
   NVMEOF_NIC_INFO                                        *NicInfo;
-  CHAR16                                                 AttemptMacString[NVMEOF_MAX_MAC_STRING_LEN] = { 0 };
   CHAR16                                                 MacString[NVMEOF_MAX_MAC_STRING_LEN];
   BOOLEAN                                                AlreadyProcessed;
   LIST_ENTRY                                             *ProcessedEntry;
   LIST_ENTRY                                             *NextEntryProcessed;
-  NVMEOF_PROCESSED_MAC                                   *ProcessedAdapter;
+  NVMEOF_PROCESSED_HFI                                   *ProcessedAdapter;
   UINT8                                                  **HostOverridesHeapRef;
   UINT8                                                  NvmeofHostNqnOverrideTmp[NVMEOF_NAME_MAX_SIZE];
+  UINT32                                                 HfiTrDescriptorHashTmp = 0;
 
   //
   // Get the offset of the first hfi section.
@@ -416,19 +416,6 @@ NvmeOfFillHostFabricInterfaceSections (
     // Check if start invoked for this NIC
     NicInfo = NvmeOfGetNicInfoByIndex (Attempt->NicIndex);
     if (NicInfo == NULL) {
-      continue;
-    }
-
-    // Logic to skip already processed adapter by comparing MAC
-    AlreadyProcessed = FALSE;
-    NET_LIST_FOR_EACH_SAFE (ProcessedEntry, NextEntryProcessed, &gAddedAdaptersList) {
-      ProcessedAdapter = NET_LIST_USER_STRUCT (ProcessedEntry, NVMEOF_PROCESSED_MAC, Link);
-      if (AsciiStrCmp (Attempt->MacString, ProcessedAdapter->MacString) == 0) {
-        AlreadyProcessed = TRUE;
-        break;
-      }
-    }
-    if (AlreadyProcessed) {
       continue;
     }
 
@@ -513,26 +500,49 @@ NvmeOfFillHostFabricInterfaceSections (
       MacString
       );
 
+    // Get the Crc32 hash of the HFI transport descriptor minus the header
+    UINTN  HfiTrHeaderSize = sizeof (EFI_ACPI_NVMEOF_BFT_HFI_TRANSPORT_INFO_DESCRIPTOR_HEADER);
+
+    HfiTrDescriptorHashTmp = CalculateCrc32 (
+                               (UINT8 *)&HfiTcpTransportInfo + (UINT8)HfiTrHeaderSize,
+                               sizeof (EFI_ACPI_NVMEOF_BFT_HFI_TRANSPORT_INFO_DESCRIPTOR_TCP) - HfiTrHeaderSize
+                               );
+
+    // Logic to skip already processed HFI by comparing hash of transport descriptor
+    AlreadyProcessed = FALSE;
+    NET_LIST_FOR_EACH_SAFE (ProcessedEntry, NextEntryProcessed, &gAddedAdaptersList) {
+      ProcessedAdapter = NET_LIST_USER_STRUCT (ProcessedEntry, NVMEOF_PROCESSED_HFI, Link);
+      if (ProcessedAdapter->HfiTrDescriptorHash == HfiTrDescriptorHashTmp) {
+        AlreadyProcessed = TRUE;
+        break;
+      }
+    }
+
     for (Index = 0; Index < gNvmeOfNbftListIndex; Index++) {
-      AsciiStrToUnicodeStrS (
-        gNvmeOfNbftList[Index].AttemptData->MacString,
-        AttemptMacString,
-        sizeof (AttemptMacString) / sizeof (AttemptMacString[0])
-        );
-      if (StrCmp (MacString, AttemptMacString) != 0) {
-        continue;
-      } else {
-        gNvmeOfNbftList[Index].DeviceAdapterIndex = HfiHeader->Index;
-        if (AsciiStrCmp (
-              gNvmeOfNbftList[Index].AttemptData->SubsysConfigData.NvmeofSubsysNqn,
-              NVMEOF_DISCOVERY_NQN
-              ) == 0)
-        {
-          gNvmeOfNbftList[Index].IsDiscoveryNqn = TRUE;
+      // Update the NvmeOfNbftList with the primary HFI index
+      if (gNvmeOfNbftList[Index].AttemptData == Attempt) {
+        if (AlreadyProcessed) {
+          gNvmeOfNbftList[Index].PrimaryHfiIndex = ProcessedAdapter->HfiHeaderRef->Index;
         } else {
-          gNvmeOfNbftList[Index].IsDiscoveryNqn = FALSE;
+          gNvmeOfNbftList[Index].PrimaryHfiIndex = HfiHeader->Index;
         }
       }
+
+      // Update the NvmeOfNbftList with the discovery NQN flag
+      if (AsciiStrCmp (
+            gNvmeOfNbftList[Index].AttemptData->SubsysConfigData.NvmeofSubsysNqn,
+            NVMEOF_DISCOVERY_NQN
+            ) == 0)
+      {
+        gNvmeOfNbftList[Index].IsDiscoveryNqn = TRUE;
+      } else {
+        gNvmeOfNbftList[Index].IsDiscoveryNqn = FALSE;
+      }
+    }
+
+    // gNvmeOfNbft list has been updated; if the HFI was already processed then skip adding to NBFT
+    if (AlreadyProcessed) {
+      continue;
     }
 
     // Copy HFI tenasport info to heap and update the HFI header structure
@@ -543,15 +553,16 @@ NvmeOfFillHostFabricInterfaceSections (
     NvmeOfAddHeapItem (Heap, NvData->HostName, HfiTcpTransportInfo.HostNameLength);
 
     // Add an entry to processed adapter list
-    ProcessedAdapter = (NVMEOF_PROCESSED_MAC *)AllocateZeroPool (sizeof (NVMEOF_PROCESSED_MAC));
+    ProcessedAdapter = (NVMEOF_PROCESSED_HFI *)AllocateZeroPool (sizeof (NVMEOF_PROCESSED_HFI));
     if (ProcessedAdapter == NULL) {
       return;
     }
 
     CopyMem (ProcessedAdapter->MacString, Attempt->MacString, sizeof (ProcessedAdapter->MacString));
-    ProcessedAdapter->HfiHeaderRef       = HfiHeader;
-    ProcessedAdapter->HostOverrideEnable = NvData->HostOverrideEnable;
-    ProcessedAdapter->HeapRef            = HostOverridesHeapRef;
+    ProcessedAdapter->HfiHeaderRef        = HfiHeader;
+    ProcessedAdapter->HfiTrDescriptorHash = HfiTrDescriptorHashTmp;
+    ProcessedAdapter->HostOverrideEnable  = NvData->HostOverrideEnable;
+    ProcessedAdapter->HeapRef             = HostOverridesHeapRef;
     InsertTailList (&gAddedAdaptersList, &ProcessedAdapter->Link);
 
     //
@@ -584,9 +595,10 @@ NvmeOfFillSubsystemNamespaceSection (
   EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_NAMESPACE_DESCRIPTOR  *SubsystemNamespace;
   EFI_ACPI_NVMEOF_BFT_CONTROL_STRUCTURE               *Control;
   EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_EXT_INFO_DESCRIPTOR   SsnsExtInfo = { 0 };
-  EFI_ACPI_NVMEOF_BFT_HFI_HEADER_DESCRIPTOR           *HfiHeader;
   UINTN                                               DeviceIndex = 0;
   UINT8                                               Index;
+  UINT8                                               IndexTmp;
+  UINT8                                               CurrentDiscIndex = 0;
   LIST_ENTRY                                          *ProcessedEntry;
   LIST_ENTRY                                          *NextEntryProcessed;
   NVMEOF_PROCESSED_NAMESPACE                          *ProcessedNamespace;
@@ -598,8 +610,6 @@ NvmeOfFillSubsystemNamespaceSection (
   SubsystemNamespace = (EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_NAMESPACE_DESCRIPTOR *)((UINTN)Table +
                                                                               Control->HfiDescOffset +
                                                                               (Control->NumHfis * NBFT_ROUNDUP (sizeof (EFI_ACPI_NVMEOF_BFT_HFI_HEADER_DESCRIPTOR))));
-  HfiHeader = (EFI_ACPI_NVMEOF_BFT_HFI_HEADER_DESCRIPTOR *)((UINTN)Table +
-                                                            Control->HostDescOffset + NBFT_ROUNDUP (sizeof (EFI_ACPI_NVMEOF_BFT_HOST_DESCRIPTOR)));
 
   // Fill the offset of 1st namespace structure in control structure
   Control->SubSytemDescOffset = (UINT16)((UINTN)SubsystemNamespace - (UINTN)Table);
@@ -613,7 +623,7 @@ NvmeOfFillSubsystemNamespaceSection (
     Control->SubSystemVersion                          = EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_VERSION;
     Control->SubSystemDescLength                       = (UINT16)sizeof (EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_NAMESPACE_DESCRIPTOR);
     SubsystemNamespace->Index                          = (UINT16)DeviceIndex + 1;
-    SubsystemNamespace->Flags                         |= EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_FLAG_BLOCK_VALID;
+    SubsystemNamespace->Flags                          = EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_FLAG_BLOCK_VALID;
     SubsystemNamespace->SubsystemTransportAdressLength = sizeof (EFI_IPv6_ADDRESS);
     SubsystemNamespace->HfiAssociationLen              = sizeof (UINT8);
 
@@ -627,8 +637,30 @@ NvmeOfFillSubsystemNamespaceSection (
 
     // Transport type
     SubsystemNamespace->TransportType = NVMEOF_TRANSPORT_TCP;
+
+    // Primary Discovery Controller index
+    AlreadyProcessed = FALSE;
     if (gNvmeOfNbftList[Index].IsDiscoveryNqn) {
-      SubsystemNamespace->PrimaryDiscoveryCtrlrIndex = gNvmeOfNbftList[Index].DeviceAdapterIndex;
+      // Check if current NBFT entry is from an already processed attempt
+      for (IndexTmp = 0; IndexTmp < Index; IndexTmp++) {
+        if (AsciiStrCmp (
+              gNvmeOfNbftList[IndexTmp].AttemptData->AttemptName,
+              gNvmeOfNbftList[Index].AttemptData->AttemptName
+              ) == 0)
+        {
+          AlreadyProcessed = TRUE;
+          break;
+        }
+      }
+
+      // Only increment the Discovery Controller index for new controllers (attempts)
+      if (AlreadyProcessed) {
+        gNvmeOfNbftList[Index].PrimaryDiscoveryCtlrIndex = gNvmeOfNbftList[IndexTmp].PrimaryDiscoveryCtlrIndex;
+      } else {
+        gNvmeOfNbftList[Index].PrimaryDiscoveryCtlrIndex = ++CurrentDiscIndex;
+      }
+
+      SubsystemNamespace->PrimaryDiscoveryCtrlrIndex = gNvmeOfNbftList[Index].PrimaryDiscoveryCtlrIndex;
       // Update flag
       SubsystemNamespace->Flags |= EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_FLAG_DISCOVERED_NAMESPACE;
     }
@@ -667,9 +699,9 @@ NvmeOfFillSubsystemNamespaceSection (
       Len                                                   = AsciiStrLen (gNvmeOfNbftList[Index].FailTridInfo->trsvcid);
       SubsystemNamespace->SubsystemTransportServiceIdLength = Len;
       NvmeOfAddHeapItem (Heap, gNvmeOfNbftList[Index].FailTridInfo->trsvcid, Len);
-      SubsystemNamespace->PrimaryHfiDescriptorIndex = HfiHeader->Index;
+      SubsystemNamespace->PrimaryHfiDescriptorIndex = gNvmeOfNbftList[Index].PrimaryHfiIndex;
       // HFI association
-      NvmeOfAddHeapItem (Heap, &(gNvmeOfNbftList[Index].DeviceAdapterIndex), sizeof (UINT8));
+      NvmeOfAddHeapItem (Heap, &(gNvmeOfNbftList[Index].PrimaryHfiIndex), sizeof (UINT8));
       // Fill the subsystem NQN into the heap.
       Len = (UINT16)AsciiStrLen (gNvmeOfNbftList[Index].FailTridInfo->subnqn);
       NvmeOfAddHeapItem (Heap, gNvmeOfNbftList[Index].FailTridInfo->subnqn, Len);
@@ -697,7 +729,7 @@ NvmeOfFillSubsystemNamespaceSection (
       }
     }
     if (AlreadyProcessed) {
-      NvmeOfAddHeapItem (Heap, &(gNvmeOfNbftList[Index].DeviceAdapterIndex), sizeof (UINT8));
+      NvmeOfAddHeapItem (Heap, &(gNvmeOfNbftList[Index].PrimaryHfiIndex), sizeof (UINT8));
       SubsystemNamespace->HfiAssociationLen += sizeof (UINT8);
       continue;
     }
@@ -740,9 +772,9 @@ NvmeOfFillSubsystemNamespaceSection (
       sizeof (SubsystemNamespace->Nid)
       );
 
-    SubsystemNamespace->PrimaryHfiDescriptorIndex = HfiHeader->Index;
+    SubsystemNamespace->PrimaryHfiDescriptorIndex = gNvmeOfNbftList[Index].PrimaryHfiIndex;
     // HFI association
-    NvmeOfAddHeapItem (Heap, &(gNvmeOfNbftList[Index].DeviceAdapterIndex), sizeof (UINT8));
+    NvmeOfAddHeapItem (Heap, &(gNvmeOfNbftList[Index].PrimaryHfiIndex), sizeof (UINT8));
     SubsystemNamespace->HfiAssociationLen = sizeof (UINT8);
 
     // Fill the subsystem NQN into the heap.
@@ -827,14 +859,12 @@ NvmeOfFillDiscoverySection (
 
   // Find the number of discovery controllers in the list
   for (Index = 0; Index < gNvmeOfNbftListIndex; Index++) {
-    if ((gNvmeOfNbftList[Index].DeviceAdapterIndex != AdapterIndex) &&
-        gNvmeOfNbftList[Index].IsDiscoveryNqn)
-    {
-      MaxDiscoveryDetailsIndex++;
-      AdapterIndex = gNvmeOfNbftList[Index].DeviceAdapterIndex;
+    if (gNvmeOfNbftList[Index].PrimaryDiscoveryCtlrIndex > MaxDiscoveryDetailsIndex) {
+      MaxDiscoveryDetailsIndex = gNvmeOfNbftList[Index].PrimaryDiscoveryCtlrIndex;
     }
   }
 
+  DEBUG ((DEBUG_INFO, "MaxDiscoveryDetailsIndex: %d\n", MaxDiscoveryDetailsIndex));
   if (MaxDiscoveryDetailsIndex == 0) {
     // No need to fill this structure as we have no discovery controller
     Control->NumDiscoveryEntires     = 0;
@@ -850,16 +880,17 @@ NvmeOfFillDiscoverySection (
   }
 
   Discovery->Index = 0;
-  AdapterIndex     = -1;
+  AdapterIndex     = 0;
   UINT8  NumRecs = 0;
 
   // Find the number of discovery records
   for (Index = 0; Index < gNvmeOfNbftListIndex; Index++) {
-    if ((gNvmeOfNbftList[Index].DeviceAdapterIndex != AdapterIndex) &&
+    if ((gNvmeOfNbftList[Index].PrimaryDiscoveryCtlrIndex != AdapterIndex) &&
         gNvmeOfNbftList[Index].IsDiscoveryNqn)
     {
       AdapterIndex = DiscoveryDetails[NumRecs].AdapterIndex =
-        gNvmeOfNbftList[Index].DeviceAdapterIndex;
+        gNvmeOfNbftList[Index].PrimaryDiscoveryCtlrIndex;
+      DiscoveryDetails[NumRecs].PrimaryHfiIndex      = gNvmeOfNbftList[Index].PrimaryHfiIndex;
       DiscoveryDetails[NumRecs].SecurityProfileIndex = 0;
       DiscoveryDetails[NumRecs].Port                 =
         gNvmeOfNbftList[Index].AttemptData->SubsysConfigData.NvmeofSubsysPortId;
@@ -891,7 +922,7 @@ NvmeOfFillDiscoverySection (
     Control->DiscoDescLengh   = (UINT16)sizeof (EFI_ACPI_NVMEOF_BFT_DISCOVERY_DESCRIPTOR);
     Discovery->Flags          = EFI_ACPI_NVMEOF_BFT_DISCOVERY_DESCRIPTOR_FLAG_BLOCK_VALID;
 
-    Discovery->HfiDescriptorIndex             = DiscoveryDetails[Index].AdapterIndex;
+    Discovery->HfiDescriptorIndex             = DiscoveryDetails[Index].PrimaryHfiIndex;
     Discovery->SecurityProfileDescriptorIndex =
       DiscoveryDetails[Index].SecurityProfileIndex;
     NvmeOfIpToStr (
@@ -950,7 +981,7 @@ NvmeOfPublishNbft (
   EFI_ACPI_DESCRIPTION_HEADER                   *Xsdt  = NULL;
   UINT8                                         Checksum;
   UINT8                                         *Heap               = NULL;
-  NVMEOF_PROCESSED_MAC                          *ProcessedAdapter   = NULL;
+  NVMEOF_PROCESSED_HFI                          *ProcessedAdapter   = NULL;
   NVMEOF_PROCESSED_NAMESPACE                    *ProcessedNamespace = NULL;
   NVMEOF_PROCESSED_IP_ADDR                      *ProcessedIpConfig  = NULL;
   LIST_ENTRY                                    *ProcessedEntry     = NULL;
@@ -1067,7 +1098,7 @@ NvmeOfPublishNbft (
 Error:
   // Remove entries from the processed adapter list
   NET_LIST_FOR_EACH_SAFE (ProcessedEntry, NextProcessedEntry, &gAddedAdaptersList) {
-    ProcessedAdapter = NET_LIST_USER_STRUCT (ProcessedEntry, NVMEOF_PROCESSED_MAC, Link);
+    ProcessedAdapter = NET_LIST_USER_STRUCT (ProcessedEntry, NVMEOF_PROCESSED_HFI, Link);
     if (ProcessedAdapter != NULL) {
       RemoveEntryList (&ProcessedAdapter->Link);
       FreePool (ProcessedAdapter);
