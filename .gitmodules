@@ -25,5 +25,4 @@
 	url = https://github.com/google/googletest.git
 [submodule "NetworkPkg/Library/DxeSpdkLib/spdk"]
 	path = NetworkPkg/Library/DxeSpdkLib/spdk
-	url = https://github.com/timberland-sig/spdk.git
-	branch = timberland-1.0_final
+	url = https://github.com/spdk/spdk.git
