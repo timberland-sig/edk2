@@ -1,7 +1,7 @@
 /** @file
   std_string.c - Implements std C string functions.
 
-Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -376,6 +376,56 @@ strtoll (
 }
 
 static UINT32  next = 1;
+
+char *
+strpbrk (
+  const char  *s1,
+  const char  *s2
+  )
+{
+  while (*s1) {
+    if (strchr (s2, *s1)) {
+      return (char *)s1;
+    }
+
+    s1++;
+  }
+
+  return NULL;
+}
+
+char *
+strdup (
+  const char  *str
+  )
+{
+  UINTN  len;
+  char   *copy;
+
+  len = strlen (str) + 1;
+  if ((copy = AllocateZeroPool (len)) == NULL) {
+    return (NULL);
+  }
+
+  CopyMem (copy, str, len);
+  return (copy);
+}
+
+char *
+strndup (
+  const char    *s,
+  unsigned int  n
+  )
+{
+  char  *copy;
+
+  if ((copy = AllocateZeroPool ((UINT32)n)) == NULL) {
+    return (NULL);
+  }
+
+  CopyMem (copy, s, n);
+  return (copy);
+}
 
 int
 rand (

@@ -1,7 +1,7 @@
 /** @file
   stdlib_types.h - Standard data types.
 
-Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -45,6 +45,15 @@ typedef int64_t ssize_t;
 
 #ifdef _MSC_VER
 #define __attribute__(x)
+// __typeof is only invoked for EDK2 when generating the nvme_ns trees, where the
+// elements are all of type spdk_nvme_ns
+// see: nvme_ctlr.c, line 40. The macro for RB_GENERATE_STATIC expands with all
+// __typeof calls acting on node.rbe_parent, which is of type spdk_nvme_ns
+#define __typeof(x)  struct spdk_nvme_ns*
+
+// __typeof__ is only called in nvme_ctlr.c, line 4084 from the expansion of SPDK_ALIGN_CEIL
+// this is only called on the input value to the macro, which is of type uint16_t
+#define __typeof__(x)  uint16_t
 #endif
 
 #define __asm
@@ -76,6 +85,8 @@ typedef INTN        __intptr_t;
 typedef UINTN       __uintptr_t;
 typedef __uintptr_t uintptr_t;
 
+typedef INTN time_t;
+
 #include "json_write.h"
 
 //
@@ -98,6 +109,8 @@ typedef __uintptr_t uintptr_t;
 #define INTMAX_MIN  (-__INT64_C(9223372036854775807)-1)
 /* Maximum for largest signed integral type.    */
 #define INTMAX_MAX  (__INT64_C(9223372036854775807))
+/* Absolute value of a signed operand.          */
+#define abs(a)  ABS(a)
 
 #define PRIx8        "x"        /* uint8_t      */
 #define PRIx16       "x"        /* uint16_t     */

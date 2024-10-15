@@ -1,7 +1,7 @@
 /** @file
   pthread_shim.h - Implements header file for pthread shim.
 
-Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -11,6 +11,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 typedef UINTN  pthread_mutex_t;
 typedef UINTN  pthread_mutexattr_t;
+typedef UINTN  pthread_spinlock_t;
 
 #define __thread  // thread local storage
 
