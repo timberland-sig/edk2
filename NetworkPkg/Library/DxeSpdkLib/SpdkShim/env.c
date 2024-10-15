@@ -1,7 +1,7 @@
 /** @file
   env.c - Implements SPDK env for EDK2 enviornment.
 
-Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -49,6 +49,34 @@ spdk_malloc (
   }
 
   return NULL;
+}
+
+/* De-allocates or frees a memory block */
+void
+free (
+  void  *ptr
+  )
+{
+  VOID             *EvalOnce;
+  SPDK_ALLOC_HEAD  *PoolHdr;
+
+  EvalOnce = ptr;
+  if (EvalOnce == NULL) {
+    return;
+  }
+
+  //
+  // In Standard C, free() handles a null pointer argument transparently. This
+  // is not true of FreePool() below, so protect it.
+  //
+  PoolHdr = (SPDK_ALLOC_HEAD *)EvalOnce - 1;
+
+  if (PoolHdr->Signature == SPDK_ALLOC_SIGNATURE) {
+    FreePool (PoolHdr);
+  } else {
+    FreePool (EvalOnce);
+  }
+  ptr = NULL;
 }
 
 void *
@@ -341,8 +369,6 @@ spdk_ring_enqueue (
   struct spdk_ring_ele  *ele = NULL;
   size_t                i;
 
-  pthread_mutex_lock (&ring->lock);
-
   for (i = 0; i < count; i++) {
     ele = AllocatePool (sizeof (*ele));
     if (!ele) {
@@ -354,7 +380,6 @@ spdk_ring_enqueue (
     ring->count++;
   }
 
-  pthread_mutex_unlock (&ring->lock);
   return i;
 }
 
@@ -394,7 +419,17 @@ spdk_ring_count (
   struct spdk_ring  *ring
   )
 {
-  return ring->count;
+  size_t  count = 0;
+
+  if (ring == NULL) {
+    return 0;
+  }
+
+  pthread_mutex_lock (&ring->lock);
+  count = ring->count;
+  pthread_mutex_unlock (&ring->lock);
+
+  return count;
 }
 
 void
@@ -429,4 +464,12 @@ spdk_pci_device_detach (
   )
 {
   return;
+}
+
+int
+spdk_pci_event_listen (
+  void
+  )
+{
+  return 0;
 }

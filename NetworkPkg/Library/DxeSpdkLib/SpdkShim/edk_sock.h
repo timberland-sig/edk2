@@ -1,7 +1,7 @@
 /** @file
   edk_socket.h - Header file for EDK sockets.
 
-Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 Copyright (c) 2022, Intel Corporation. All rights reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -59,6 +59,26 @@ struct spdk_edk_sock {
 
 #define __edk_sock(sock)  (struct spdk_edk_sock *)sock
 
+#pragma pack(push, 1)
+struct edk_spdk_sock_opts {
+  //
+  // Spdk socket initialization options.
+  //
+  struct spdk_sock_opts    *base;
+
+  //
+  // Additional context for socket creation.
+  // In UEFI use case, this field allows to provide additional information
+  // required for TcpIo instance creation.
+  //
+  void                     *ctx;
+};
+
+#pragma pack(pop)
+
+#define __edk_sock_opts(opts)   (struct edk_spdk_sock_opts *)opts
+#define __spdk_sock_opts(opts)  (struct spdk_sock_opts *)opts->base
+
 int
 edk_sock_strtoip4 (
   const CHAR8       *String,
@@ -104,6 +124,14 @@ edk_sock_readv (
   struct spdk_sock  *_sock,
   struct iovec      *iov,
   int               iovcnt
+  );
+
+struct spdk_sock *
+edk_spdk_sock_connect_ext (
+  const char             *ip,
+  int                    port,
+  const char             *_impl_name,
+  struct spdk_sock_opts  *opts
   );
 
 #endif

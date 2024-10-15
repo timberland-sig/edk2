@@ -1,7 +1,7 @@
 /** @file
   std_string.h - Implements std library for string functions.
 
-Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -25,7 +25,6 @@ extern "C" {
 
 #define calloc(count, size)        AllocateZeroPool ((count) * (size))
 #define realloc(buffer, new_size)  ReallocatePool (sizeof (*buffer), new_size, buffer)
-#define free(x)                    FreePool(x)
 
 #define UUID_SIZE  16
 
@@ -134,6 +133,35 @@ strtoll (
   int                      base
   );
 
+size_t
+spdk_str_chomp (
+  char  *s
+  );
+
+size_t
+spdk_strlen_pad (
+  const void  *str,
+  size_t      size,
+  int         pad
+  );
+
+char *
+strpbrk (
+  const char  *s1,
+  const char  *s2
+  );
+
+char *
+strdup (
+  const char  *s1
+  );
+
+char *
+strndup (
+  const char    *s,
+  unsigned int  n
+  );
+
 int
 snprintf (
   char        *str,
@@ -193,6 +221,7 @@ strcasestr (
 #define offsetof(type, member)              OFFSET_OF(type,member)
 #define atoi(nptr)                          AsciiStrDecimalToUintn(nptr)
 #define gettimeofday(tvp, tz)               do { (tvp)->tv_sec = time(NULL); (tvp)->tv_usec = 0; } while (0)
+#define strstr(str1, str2)                  AsciiStrStr(str1,str2)
 
 int
 EFIAPI
@@ -203,7 +232,7 @@ sprintf_s (
   ...
   );
 
-#define snprintf(str, n, fmt, ...)  sprintf_s(str, n, fmt, __VA_ARGS__)
+#define snprintf(str, n, fmt, ...)  sprintf_s((char*)str, n, fmt, __VA_ARGS__)
 
 #define vsnprintf  AsciiVSPrint
 #define sscanf(str, fmt, ...)  1

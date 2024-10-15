@@ -1,7 +1,7 @@
 ## @file
 #  This module provides SPDK library implementation for NVMeof TCP.
 #
-#  Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+#  Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 #  Copyright (c) 2022, Intel Corporation. All rights reserved.<BR>
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -27,31 +27,33 @@
   spdk/lib/util/crc32.c
   spdk/lib/util/crc32c.c
   spdk/lib/util/bit_array.c
-  spdk/lib/nvme/nvme.c
+  SpdkShim/spdk/lib/nvme/nvme.c
+  SpdkShim/edk_nvme.c
   spdk/lib/nvme/nvme_ctrlr_cmd.c
-  spdk/lib/nvme/nvme_ctrlr.c
+  SpdkShim/spdk/lib/nvme/nvme_ctrlr.c
   spdk/lib/nvme/nvme_ctrlr_ocssd_cmd.c
-  spdk/lib/nvme/nvme_fabric.c
+  SpdkShim/spdk/lib/nvme/nvme_fabric.c
   spdk/lib/nvme/nvme_io_msg.c
   spdk/lib/nvme/nvme_ns.c
   spdk/lib/nvme/nvme_ns_cmd.c
   spdk/lib/nvme/nvme_ns_ocssd_cmd.c
   spdk/lib/nvme/nvme_poll_group.c
-  spdk/lib/nvme/nvme_qpair.c
+  SpdkShim/spdk/lib/nvme/nvme_qpair.c
   spdk/lib/nvme/nvme_quirks.c
-  spdk/lib/nvme/nvme_transport.c
-  spdk/lib/nvme/nvme_tcp.c
-  spdk/lib/nvme/nvme_transport.c
+  SpdkShim/spdk/lib/nvme/nvme_transport.c
+  SpdkShim/spdk/lib/nvme/nvme_tcp.c
   SpdkShim/pthread_shim.c
   SpdkShim/json_write.c
   spdk/lib/sock/sock.c
   SpdkShim/edk_sock.c
   SpdkShim/env.c
-  spdk/lib/util/dif.c
+  SpdkShim/dif_shim.c
   SpdkShim/uuid.c
   spdk/lib/util/string.c
   SpdkShim/std_string.c
   SpdkShim/edk_log.c
+  SpdkShim/edk_nvme_ctrlr.c
+  SpdkShim/edk_nvme_fabric.c
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -82,8 +84,11 @@
   MSFT:*_*_*_CC_FLAGS     = /wd4267
   MSFT:*_*_*_CC_FLAGS     = /wd4244
   MSFT:*_*_*_CC_FLAGS     = /wd4477
+# disable warning C4245: signed/unsigned mismatch
   MSFT:*_*_*_CC_FLAGS     = /wd4245
-  MSFT:*_*_*_CC_FLAGS     = /nostdinc
+# disable warning C4702: unreachable code
+  MSFT:*_*_*_CC_FLAGS     = /wd4702
+  MSFT:*_*_*_CC_FLAGS     = /std:c11
 
-  GCC:*_*_*_CC_FLAGS      = -Wno-error=maybe-uninitialized
+  GCC:*_*_*_CC_FLAGS      = -Wno-error=pointer-sign
   #*_*_*_CC_FLAGS =  -nostdinc -Wunused-function -nostdlib
