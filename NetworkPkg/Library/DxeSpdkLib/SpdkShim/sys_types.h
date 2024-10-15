@@ -2,7 +2,7 @@
   sys_types.h - Contains definition of std vector and builtin variable to
   keep MSVC compiler happy.
 
-Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -20,6 +20,11 @@ struct iovec {
   void      *iov_base; /* Starting address */
   size_t    iov_len;   /* Number of bytes to transfer */
 };
+
+void
+free (
+  void  *ptr
+  );
 
 uint32_t
 spdk_u32log2 (
@@ -47,6 +52,11 @@ freeaddrinfo (
 int
 gai_strerror (
   int  ret
+  );
+
+time_t
+time (
+  time_t  *timer
   );
 
 #if defined (_MSC_VER)

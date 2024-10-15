@@ -1,7 +1,7 @@
 /** @file
   sys_types.c
 
-Copyright (c) 2022 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2022 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -236,4 +236,12 @@ gai_strerror (
   )
 {
   return 0;
+}
+
+time_t
+time (
+  time_t  *timer
+  )
+{
+  return 1;
 }
