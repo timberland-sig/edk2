@@ -47,11 +47,12 @@
     - [4.11 <span id="_Toc56603928" class="anchor"></span>Device Path](#411-device-path)
     - [4.12  <span id="_Toc56603931" class="anchor"></span>Multipath](#412--multipath)
     - [4.13 <span id="_Toc59132823" class="anchor"></span>Static and Dynamic Controller](#413-static-and-dynamic-controller)
-    - [4.14 <span id="_Toc56603926" class="anchor"></span>SPDK Library Porting](#414-spdk-library-porting)
-    - [4.14.1 <span id="_Toc81475863" class="anchor"></span>SPDK ENV Porting](#4141-spdk-env-porting)
-      - [4.14.2 <span id="_Toc81475864" class="anchor"></span>Kato Timer](#4142-kato-timer)
-      - [4.14.3 <span id="_Toc81475865" class="anchor"></span>LibC Dependencies](#4143-libc-dependencies)
-      - [4.14.4 <span id="_Toc81475866" class="anchor"></span>Socket API](#4144-socket-api)
+    - [4.14 <span id="_Toc56603926" class="anchor"></span>SPDK Library Integration](#414-spdk-library-integration)
+      - [4.14.1 <span id="_Toc81475863" class="anchor"></span>SPDK ENV Porting](#4141-spdk-env-porting)
+        - [4.14.1.1 <span id="_Toc81475864" class="anchor"></span>Kato Timer](#41411-kato-timer)
+        - [4.14.1.2 <span id="_Toc81475865" class="anchor"></span>LibC Dependencies](#41412-libc-dependencies)
+        - [4.14.1.3 <span id="_Toc81475866" class="anchor"></span>Socket API](#41413-socket-api)
+      - [4.14.2 <span id="_Toc81475911" class="anchor"></span>SPDK Importing](#4142-spdk-importing)
   - [5 <span id="_Toc81475867" class="anchor"></span>NVMe-oF connection security](#5-nvme-of-connection-security)
   - [6 <span id="_Toc81475868" class="anchor"></span>NVMe-oF UEFI CLI Design](#6-nvme-of-uefi-cli-design)
     - [6.1 <span id="_Toc81475869" class="anchor"></span>Overview](#61-overview)
@@ -477,9 +478,11 @@ In the static model, several controllers may be exposed. A connection to a speci
 
 In process of connecting to the controller, a fabric connect command is send to the controller. In case of connect to the admin queue pairs, the SPDK host implementation sets the controller ID field in connect data to 0xFFFF. This suggests that SPDK host implementation uses dynamic model to get a controller allocated from the NVMe subsystem. Later as part of controller initialization, the identify data gives the actual controller ID of the allocated controller which is then used for connecting to IO qpairs of the specific controllers in the subsystem.
 
-### 4.14 <span id="_Toc56603926" class="anchor"></span>SPDK Library Porting
+### 4.14 <span id="_Toc56603926" class="anchor"></span>SPDK Library Integration
 
 SPDK library is designed to run on multiple platform namely Linux, FreeBSD and Windows (newer version) and uses POSIX and C library. The SPDK uses DPDK library for performing PCIe, Memory management, Ring buffer and virtual to physical conversion. The SPDK was designed in mind that not all users will be interested in using DPDK, as DPDK is designed more for Unix related operations. The SPDK developers added env.c which serves as bridge between the SPDK and DPDK, so to port the SPDK to EDK UEFI platform the corresponding equivalent calls needs to be identified for the functions which are required for NVMeOF TCP operation. The PCIe related calls can be omitted.
+
+In an effort to increase portability and maintainability while reducing future complexity for SPDK to EDK enablement, the goals for this task included a restriction on changes to the SPDK source itself. This is met through a combination of porting and importing the SPDK source as required for functionality, compilation, and stability.
 
 ### 4.14.1 <span id="_Toc81475863" class="anchor"></span>SPDK ENV Porting
 
@@ -488,7 +491,7 @@ SPDK library is designed to run on multiple platform namely Linux, FreeBSD and W
 |1|Memory management calls|spdk_malloc|AllocatePool                   |
 |||spdk_zmalloc                       |AllocateCopyPool OR SetMem     |
 |||spdk_realloc                       |FreePool and then AllocatePool
-|||spdk_free                          |FreePool
+|||spdk_free                          |FreePool address based on pool header signature.
 |||                                   |The AllocatePool() and FreePool() boot services are used by UEFI drivers to allocate and free small buffers that are guaranteed to be aligned on an 8-byte boundary. These services are ideal for allocating and freeing data structures.<br><br>The AllocatePages() and FreePages() boot services are used by UEFI drivers to allocate and free larger buffers that are guaranteed to be aligned on a 4 KB boundary. These services allow buffers to be allocated at any available address, at specific addresses, or below a specific address.
 |2|DMA able Memory allocation calls|spdk_dma_malloc|AllocatePoolAllocateCopyPool OR SetMemFreePool and then AllocatePool
 |||spdk_dma_zmalloc|AllocatePoolAllocateCopyPool OR SetMemFreePool and then AllocatePool
@@ -539,12 +542,20 @@ SPDK library is designed to run on multiple platform namely Linux, FreeBSD and W
 |||spdk_mem_reserve
 |||spdk_mem_get_fd_and_offset
 |13|Posix threads and Mutex locks|Posix threads and Mutex locks|Since Threads are not supported, no operations will be performed. Ideally no need for lock but EFI supports EfiAcquireLock and EfiReleaseLock calls.|
+|14|SPDK Data Integrity Field related|DIF context related|They will be dummy functions and return NULL values wherever required.|
+|15|SPDK NVMe related|nvme_ctrlr_probe|Ported implementation with minor adjustments to support EDK2-required context|
+|||spdk_nvme_ctrlr_opts|`edk_spdk_nvme_ctrlr_opts` utilizes `spdk_nvme_ctrlr_opts` with additional fields to support EDK2-required context|
+|||nvme_ctrlr_keep_alive|Imported static function from source for use in EDK2 environment.|
+|||nvme_fabric_discover_probe|These functions have been ported with minimal modifications to support the EDK2-required context provided by `edk_spdk_nvme_ctrlr_opts`. Additionally, they support the population of a list of failed TRIDs during discovery.|
+|||nvme_fabric_get_discovery_log_page ||
+|||nvme_fabric_ctrlr_discover ||
+|||nvme_fabric_ctrlr_scan ||
 
-#### 4.14.2 <span id="_Toc81475864" class="anchor"></span>Kato Timer
+#### 4.14.1.1 <span id="_Toc81475864" class="anchor"></span>Kato Timer
 
 A periodic timer will be implemented to send keep-alive commands to the connected controllers to keep the connection active. The default keep-alive timeout for the NVMeOF driver is set to 6000 microseconds. For CLI, the default keep-alive timeout value is set to ‘0’ which indicates infinite timeout which never expires until disconnected.
 
-#### 4.14.3 <span id="_Toc81475865" class="anchor"></span>LibC Dependencies
+#### 4.14.1.2 <span id="_Toc81475865" class="anchor"></span>LibC Dependencies
 
 The SPDK code was written considering libc and POSIX environment in mind, the EDK does not support POSIX and EDK2 libc is maintained as a different repository, keeping in mind that this code will merge later in the EDK repository, the goal is to remove dependency on EDK2 libc.
 
@@ -594,7 +605,7 @@ The dependency on LibC functionality like string, memory operations functions wi
 
 std\_error.h file will be created for assigning SPDK error values equivalent to edk2 error values.
 
-#### 4.14.4 <span id="_Toc81475866" class="anchor"></span>Socket API
+#### 4.14.1.3 <span id="_Toc81475866" class="anchor"></span>Socket API
 
 The SPDK implementation uses POSIX socket library calls for socket operations since edk2 does not support natively but supports TcpIoLib sockets. The following functions will be implemented as edk\_sock.c which will implement the required socket calls. The group socket API’s will not be supported as they are not required.
 
@@ -605,6 +616,25 @@ The SPDK implementation uses POSIX socket library calls for socket operations si
 | \_sock\_flush | This function will use TcpIoTransmit function and responsible for transmitting data  |
 | edk\_sock\_writev\_async | If there is enough data queued it will call \_sock\_flush() function to transmit the data  |
 | edk\_sock\_readv  | It is used for receiving data, and uses TcpIoReceive function  |
+
+### 4.14.2 <span id="_Toc81475911" class="anchor"></span>SPDK Importing
+
+Importing of SPDK source is only performed when necessary, with the long-term goal of imported code to be eventually ported to EDK. Importing attempts to be as minimal as possible, providing EDK with modified SPDK source required for driver functionality, compiler satisfaction, and stability. There are exceptions to this rule, where importing and porting were consolidated to prevent additional SPDK importing. Identified files necessary for importing and their details are listed below.
+
+| **File** | **Location in EDK**  | **Change Summary**  |
+|------------------|----------------|----------------|
+| lib/nvme/nvme.c                  | NetworkPkg/Library/DxeSpdkLib/SpdkShim/spdk/lib/nvme/nvme.c           | Compiler compatibility |
+| lib/nvme/nvme_ctrlr.c            | NetworkPkg/Library/DxeSpdkLib/SpdkShim/spdk/lib/nvme/nvme_ctrlr.c     | Compiler compatibility, Coverity fixes |
+| lib/nvme/nvme_fabric.c           | NetworkPkg/Library/DxeSpdkLib/SpdkShim/spdk/lib/nvme/nvme_fabric.c    | Compiler compatibility, Coverity fixes |
+| lib/nvme/nvme_qpair.c            | NetworkPkg/Library/DxeSpdkLib/SpdkShim/spdk/lib/nvme/nvme_qpair.c     | Compiler compatibility, Coverity fixes |
+| lib/nvme/nvme_tcp.c              | NetworkPkg/Library/DxeSpdkLib/SpdkShim/spdk/lib/nvme/nvme_tcp.c       | Imported and Ported for EDK support, Coverity fixes |
+| lib/nvme/nvme_transport.c        | NetworkPkg/Library/DxeSpdkLib/SpdkShim/spdk/lib/nvme/nvme_transport.c | Compiler compatibility |
+| include/spdk_internal/nvme_tcp.h | NetworkPkg/Library/DxeSpdkLib/SpdkShim/spdk/spdk_internal/nvme_tcp.h  | Compiler compatibility, Coverity fixes |
+| include/spdk_internal/sock.h     | NetworkPkg/Library/DxeSpdkLib/SpdkShim/spdk/spdk_internal/sock.h      | Compiler compatibility |
+
+Changes made to the imported SPDK source code are currently tracked in the [timberland-modified-imports](https://github.com/timberland-sig/spdk/tree/timberland-modified-imports) branch of the timberland-sig SPDK repository. Note that formatting changes were applied to the imported source code before any functional changes, so it is recommended to compare the commits of the development branch to see relevant code changes. If desired, full file comparisons against the original source (including formatting changes) can be found [here](https://github.com/timberland-sig/spdk/compare/spdk_v23.01.1..timberland-modified-imports).
+
+All functional changes to the imported source code were made to resolve cross-compiler compilation issues or address checker issues. The exception is lib/nvme/nvme_tcp.c, which underwent significant modifications to enable EDK2 and NVMeoF support. We made this change instead of handling it as a shim-level file because importing additional SPDK sources would have been necessary, which would have resulted in a larger code footprint. Although this approach is not ideal, our long-term goal is to fully port this code and eliminate the need for this compromise.
 
 ## 5 <span id="_Toc81475867" class="anchor"></span>NVMe-oF connection security
 
