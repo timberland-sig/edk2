@@ -1,7 +1,7 @@
 /** @file
   edk_log.h - Implements shim for SPDK log.
 
-Copyright (c) 2022 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2022 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -11,6 +11,10 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 #define SPDK_LOG_H  /* To avoid spdk's log.h */
 #define SPDK_LOG_REGISTER_COMPONENT(FLAG)
+#define SPDK_DEBUGLOG_FLAG_ENABLED(name)  FALSE
+
+#define SPDK_LOG_DEPRECATION_REGISTER(tag, desc, release, rate)
+#define SPDK_LOG_DEPRECATED(tag)
 
 void
 EFIAPI

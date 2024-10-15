@@ -1,7 +1,7 @@
 /** @file
   std_error.h - Standard error code definition.
 
-Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -41,5 +41,8 @@ extern "C" {
 #define EBADF         4   // EFI_BAD_BUFFER_SIZE
 #define ERANGE        34  /* Result too large */
 #define EAFNOSUPPORT  47  /* Address family not supported by protocol family */
+#define EALREADY      20  // EFI_ALREADY_STARTED
+#define ENOSYS        3   // EFI_UNSUPPORTED
+#define ETIMEDOUT     18  // EFI_TIMEOUT
 
 #endif
