@@ -1,13 +1,15 @@
 /** @file
   edk_socket.c - Implements EDK sockets for SPDK.
 
-Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 Copyright (c) 2022 - 2023, Intel Corporation. All rights reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
 
 #include "edk_sock.h"
+
+#define SPDK_SOCK_OPTS_FIELD_OK(opts, field)  (offsetof(struct spdk_sock_opts, field) + sizeof(opts->field) <= (opts->opts_size))
 
 int  errno;
 
@@ -17,7 +19,7 @@ edk_sock_strtoip4 (
   EFI_IPv4_ADDRESS  *Ip4Address
   )
 {
-  int    Status      = 0;
+  UINTN  Status      = EFI_SUCCESS;
   CHAR8  *EndPointer = NULL;
 
   Status = AsciiStrToIpv4Address (String, &EndPointer, Ip4Address, NULL);
@@ -34,7 +36,7 @@ edk_sock_strtoip6 (
   EFI_IPv6_ADDRESS  *Ip6Address
   )
 {
-  int    Status      = 0;
+  UINTN  Status      = EFI_SUCCESS;
   CHAR8  *EndPointer = NULL;
 
   Status = AsciiStrToIpv6Address (String, &EndPointer, Ip6Address, NULL);
@@ -127,11 +129,14 @@ edk_sock_connect (
   EFI_STATUS                                             Status = EFI_SUCCESS;
   EFI_IPv6_ADDRESS                                       ip6_addr;
   EFI_IPv4_ADDRESS                                       ip4_addr;
-  TCP_IO_CONFIG_DATA                                     *TcpIoConfig  = NULL;
-  TCP4_IO_CONFIG_DATA                                    *Tcp4IoConfig = NULL;
-  TCP6_IO_CONFIG_DATA                                    *Tcp6IoConfig = NULL;
-  TCP_IO                                                 *TcpIo        = NULL;
-  UINT8                                                  *Packet       = NULL;
+  TCP_IO_CONFIG_DATA                                     *TcpIoConfig   = NULL;
+  TCP4_IO_CONFIG_DATA                                    *Tcp4IoConfig  = NULL;
+  TCP6_IO_CONFIG_DATA                                    *Tcp6IoConfig  = NULL;
+  TCP_IO                                                 *TcpIo         = NULL;
+  UINT8                                                  *Packet        = NULL;
+  struct edk_spdk_sock_opts                              *edk_sock_opts = __edk_sock_opts (opts);
+
+  opts = __spdk_sock_opts (edk_sock_opts);
 
   sock = calloc (1, sizeof (*sock));
   if (sock == NULL) {
@@ -153,9 +158,9 @@ edk_sock_connect (
     ip = (const char *)&buf[0];
   }
 
-  ASSERT (opts->ctx != NULL);
+  ASSERT (edk_sock_opts->ctx != NULL);
 
-  SockContext   = (struct spdk_edk_sock_ctx *)opts->ctx;
+  SockContext   = (struct spdk_edk_sock_ctx *)edk_sock_opts->ctx;
   sock->Context = SockContext;
   TcpIoConfig   = &sock->TcpIoConfig;
   TcpIo         = &sock->TcpIo;
@@ -799,15 +804,6 @@ edk_sock_set_recvlowat (
 }
 
 static int
-edk_sock_get_placement_id (
-  struct spdk_sock  *_sock,
-  int               *placement_id
-  )
-{
-  return 0;
-}
-
-static int
 edk_sock_group_impl_add_sock (
   struct spdk_sock_group_impl  *_group,
   struct spdk_sock             *_sock
@@ -909,6 +905,46 @@ edk_sock_impl_set_opts (
   return 0;
 }
 
+/*
+ * opts The opts allocated in the current library.
+ * opts_user The opts passed by the caller.
+ * */
+// Defined here for access of static function
+static void
+edk_sock_init_opts (
+  struct spdk_sock_opts  *opts,
+  struct spdk_sock_opts  *opts_user
+  )
+{
+  assert (opts);
+  assert (opts_user);
+
+  opts->opts_size = sizeof (*opts);
+  spdk_sock_get_default_opts (opts);
+
+  /* reset the size according to the user */
+  opts->opts_size = opts_user->opts_size;
+  if (SPDK_SOCK_OPTS_FIELD_OK (opts, priority)) {
+    opts->priority = opts_user->priority;
+  }
+
+  if (SPDK_SOCK_OPTS_FIELD_OK (opts, zcopy)) {
+    opts->zcopy = opts_user->zcopy;
+  }
+
+  if (SPDK_SOCK_OPTS_FIELD_OK (opts, ack_timeout)) {
+    opts->ack_timeout = opts_user->ack_timeout;
+  }
+
+  if (SPDK_SOCK_OPTS_FIELD_OK (opts, impl_opts)) {
+    opts->impl_opts = opts_user->impl_opts;
+  }
+
+  if (SPDK_SOCK_OPTS_FIELD_OK (opts, impl_opts)) {
+    opts->impl_opts_size = opts_user->impl_opts_size;
+  }
+}
+
 struct spdk_net_impl  g_edksock_net_impl = {
   .name                   = "edksock",
   .getaddr                = edk_sock_getaddr,
@@ -927,7 +963,6 @@ struct spdk_net_impl  g_edksock_net_impl = {
   .is_ipv6                = edk_sock_is_ipv6,
   .is_ipv4                = edk_sock_is_ipv4,
   .is_connected           = edk_sock_is_connected,
-  .get_placement_id       = edk_sock_get_placement_id,
   .group_impl_create      = edk_sock_group_impl_create,
   .group_impl_add_sock    = edk_sock_group_impl_add_sock,
   .group_impl_remove_sock = edk_sock_group_impl_remove_sock,
@@ -936,3 +971,62 @@ struct spdk_net_impl  g_edksock_net_impl = {
   .get_opts               = edk_sock_impl_get_opts,
   .set_opts               = edk_sock_impl_set_opts,
 };
+
+/**
+  Shim implementation of `spdk_sock_connect_ext`, adjusted for EDK2 use.
+--
+  Create a socket using the specific sock implementation, connect the socket
+  to the specified address and port (of the server), and then return the socket.
+  This function is used by client.
+
+  @param ip IP address of the server.
+  @param port Port number of the server.
+  @param impl_name The sock_implementation to use, such as "posix". If impl_name is
+  specified, it will *only* try to connect on that impl. If it is NULL, it will try
+  all the sock implementations in order and uses the first sock implementation which
+  can connect.
+  @param opts The sock option pointer provided by the user which should not be NULL pointer.
+
+  @return a pointer to the connected socket on success, or NULL on failure.
+**/
+struct spdk_sock *
+edk_spdk_sock_connect_ext (
+  const char             *ip,
+  int                    port,
+  const char             *_impl_name,
+  struct spdk_sock_opts  *opts
+  )
+{
+  struct spdk_sock           *sock;
+  struct spdk_sock_opts      opts_local;
+  struct edk_spdk_sock_opts  *edk_sock_opts = __edk_sock_opts (opts);
+
+  opts = __spdk_sock_opts (edk_sock_opts);
+  DEBUG ((DEBUG_INFO, "opts is %p\n", opts));
+  DEBUG ((DEBUG_INFO, "edk_sock_opts->ctx = %p\n", edk_sock_opts->ctx));
+
+  if (opts == NULL) {
+    SPDK_ERRLOG ("the opts should not be NULL pointer\n");
+    return NULL;
+  }
+
+  DEBUG ((DEBUG_INFO, "Creating a client socket using impl %a \n", g_edksock_net_impl.name));
+  edk_sock_init_opts (&opts_local, opts);
+  edk_sock_opts->base = &opts_local;
+  sock                = g_edksock_net_impl.connect (ip, port, (struct spdk_sock_opts *)edk_sock_opts);
+  if (sock != NULL) {
+    /* Copy the contents, both the two structures are the same ABI version */
+    memcpy (&sock->opts, &opts_local, sizeof (sock->opts));
+
+    /* Clear out impl_opts to make sure we don't keep reference to a dangling
+      * pointer */
+    sock->opts.impl_opts = NULL;
+    sock->net_impl       = &g_edksock_net_impl;
+    TAILQ_INIT (&sock->queued_reqs);
+    TAILQ_INIT (&sock->pending_reqs);
+
+    return sock;
+  }
+
+  return NULL;
+}

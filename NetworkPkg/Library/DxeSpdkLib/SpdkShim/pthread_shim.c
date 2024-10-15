@@ -2,7 +2,7 @@
   pthread_shim.c - Shim module for pthread functions for single-threaded
   systems, such as UEFI.
 
-Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -36,6 +36,14 @@ pthread_mutex_destroy (
 
 int
 pthread_mutex_lock (
+  pthread_mutex_t  *__mutex
+  )
+{
+  return 0;
+}
+
+int
+pthread_mutex_trylock (
   pthread_mutex_t  *__mutex
   )
 {
