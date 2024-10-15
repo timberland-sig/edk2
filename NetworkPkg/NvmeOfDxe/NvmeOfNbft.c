@@ -666,7 +666,7 @@ NvmeOfFillSubsystemNamespaceSection (
     }
 
     // Root Path in heap
-    if (gNvmeOfRootPath != NULL) {
+    if ((gNvmeOfRootPath != NULL) && (gNvmeOfRootPath[0] != '\0')) {
       SsnsExtInfo.DhcpRootPathLength = (AsciiStrLen (gNvmeOfRootPath) - 1);
     } else {
       SsnsExtInfo.DhcpRootPathLength = 0;

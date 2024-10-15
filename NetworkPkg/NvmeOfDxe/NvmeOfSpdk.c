@@ -1,7 +1,7 @@
 /** @file
   Functions to invoke SPDK API's for NVMeOF driver.
 
-  Copyright (c) 2021 - 2023 Dell, Inc. or its subsidiaries. All Rights Reserved.<BR>
+  Copyright (c) 2021 - 2024, Dell, Inc. or its subsidiaries. All Rights Reserved.<BR>
   Copyright (c) 2022 - 2023, Intel Corporation. All rights reserved.<BR>
   Copyright (c) 2022, SUSE LLC. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -12,7 +12,7 @@
 #include "NvmeOfDriver.h"
 #include "NvmeOfBlockIo.h"
 #include "NvmeOfDeviceInfo.h"
-#include "spdk/nvme.h"
+#include "edk_nvme.h"
 #include "spdk/uuid.h"
 #include "spdk_internal/sock.h"
 #include "nvme_internal.h"
@@ -23,7 +23,7 @@ NVMEOF_NQN_NID                               gNvmeOfNqnNidMap[MAX_SUBSYSTEMS_SUP
 NVMEOF_NBFT                                  gNvmeOfNbftList[NID_MAX];
 UINT8                                        NqnNidMapINdex       = 0;
 UINT8                                        gNvmeOfNbftListIndex = 0;
-extern const struct spdk_nvme_transport_ops  tcp_ops;
+extern const struct spdk_nvme_transport_ops  g_edk_nvme_tcp_ops;
 extern struct spdk_net_impl                  g_edksock_net_impl;
 NVMEOF_CLI_CTRL_MAPPING                      *CtrlrInfo = NULL;
 STATIC struct spdk_nvmf_discovery_log_page   *gDiscoveryPage;
@@ -39,11 +39,13 @@ NvmeOfProbeCallback (
   IN struct spdk_nvme_ctrlr_opts          *Opts
   )
 {
-  NVMEOF_GLOBAL_DATA            *NvmeOfData;
-  UINTN                         NvmeOfDataSize = 0;
-  NVMEOF_DRIVER_DATA            *Private;
-  struct spdk_edk_sock_ctx      *Context;
-  NVMEOF_ATTEMPT_CONFIG_NVDATA  *AttemptData;
+  NVMEOF_GLOBAL_DATA               *NvmeOfData;
+  UINTN                            NvmeOfDataSize = 0;
+  NVMEOF_DRIVER_DATA               *Private;
+  struct spdk_edk_sock_ctx         *Context;
+  NVMEOF_ATTEMPT_CONFIG_NVDATA     *AttemptData;
+  struct edk_spdk_nvme_ctrlr_opts  *EdkOpts  = __edk_opts (Opts);
+  struct spdk_nvme_ctrlr_opts      *SpdkOpts = __spdk_opts (EdkOpts);
 
   NvmeOfData = NvmeOfGetVariableAndSize (
                  L"NvmeofGlobalData",
@@ -56,11 +58,11 @@ NvmeOfProbeCallback (
   }
 
   // Host identifier in UUID format
-  CopyMem (Opts->extended_host_id, NvmeOfData->NvmeofHostId, sizeof (Opts->extended_host_id));
-  CopyMem (Opts->hostnqn, NvmeOfData->NvmeofHostNqn, sizeof (NvmeOfData->NvmeofHostNqn));
+  CopyMem (SpdkOpts->extended_host_id, NvmeOfData->NvmeofHostId, sizeof (SpdkOpts->extended_host_id));
+  CopyMem (SpdkOpts->hostnqn, NvmeOfData->NvmeofHostNqn, sizeof (NvmeOfData->NvmeofHostNqn));
 
   // Set Kato timeout
-  Opts->keep_alive_timeout_ms = NVMEOF_KATO_TIMOUT;
+  SpdkOpts->keep_alive_timeout_ms = NVMEOF_KATO_TIMOUT;
 
   // Fill socket context
   Private     = (NVMEOF_DRIVER_DATA *)CallbackCtx;
@@ -90,7 +92,7 @@ NvmeOfProbeCallback (
       );
   }
 
-  Opts->sock_ctx = Context;
+  EdkOpts->sock_ctx = Context;
 
   DEBUG ((DEBUG_INFO, "Attaching to %a\n", Trid->traddr));
   FreePool (NvmeOfData);
@@ -436,16 +438,17 @@ NvmeOfProbeControllers (
   IN UINT8                         IpVersion
   )
 {
-  UINT16                         TargetPort = 0;
-  CHAR8                          Port[PORT_STRING_LEN];
-  CHAR8                          Ipv4Addr[IPV4_STRING_SIZE];
-  CHAR16                         Ipv6Addr[IPV6_STRING_SIZE];
-  struct spdk_nvme_transport_id  *Trid;
-  struct spdk_nvme_ctrlr         *Ctrlr = NULL;
-  struct spdk_nvme_ctrlr_opts    Opts   = { 0, };
-  struct spdk_nvme_fail_trid     *FailedTridInfo;
-  LIST_ENTRY                     *Entry;
-  LIST_ENTRY                     *NextEntry;
+  UINT16                           TargetPort = 0;
+  CHAR8                            Port[PORT_STRING_LEN];
+  CHAR8                            Ipv4Addr[IPV4_STRING_SIZE];
+  CHAR16                           Ipv6Addr[IPV6_STRING_SIZE];
+  struct spdk_nvme_transport_id    *Trid;
+  struct spdk_nvme_ctrlr           *Ctrlr  = NULL;
+  struct spdk_nvme_ctrlr_opts      Opts    = { 0, };
+  struct edk_spdk_nvme_ctrlr_opts  EdkOpts = { 0, };
+  struct spdk_nvme_fail_trid       *FailedTridInfo;
+  LIST_ENTRY                       *Entry;
+  LIST_ENTRY                       *NextEntry;
 
   Trid = AllocateZeroPool (sizeof (struct spdk_nvme_transport_id));
   if (Trid == NULL) {
@@ -469,7 +472,7 @@ NvmeOfProbeControllers (
   sprintf (Port, "%d", TargetPort);
   CopyMem (Trid->trsvcid, Port, sizeof (Port));
   if (nvme_get_transport (Trid->trstring) == NULL) {
-    spdk_nvme_transport_register (&tcp_ops);
+    spdk_nvme_transport_register (&g_edk_nvme_tcp_ops);
     spdk_net_impl_register (&g_edksock_net_impl, DEFAULT_SOCK_PRIORITY);
   }
 
@@ -525,8 +528,10 @@ NvmeOfProbeControllers (
       }
 
       spdk_nvme_ctrlr_get_default_ctrlr_opts (&Opts, sizeof (Opts));
-      NvmeOfProbeCallback (NULL, Trid, &Opts);
-      Ctrlr = nvme_transport_ctrlr_construct (Trid, (const struct spdk_nvme_ctrlr_opts *)&Opts, NULL);
+      EdkOpts.base     = &Opts;
+      EdkOpts.sock_ctx = NULL;
+      NvmeOfProbeCallback (NULL, Trid, (struct spdk_nvme_ctrlr_opts *)&EdkOpts);
+      Ctrlr = nvme_transport_ctrlr_construct (Trid, (const struct spdk_nvme_ctrlr_opts *)&EdkOpts, NULL);
       if (Ctrlr) {
         NVMeOfGetAsqz (Ctrlr);
         nvme_transport_ctrlr_destruct (Ctrlr);

@@ -41,6 +41,8 @@
 #include <Shared/NvmeOfNvData.h>
 
 #include <edk_sock.h>
+#include <edk_nvme_ctrlr.h>
+#include <edk_nvme_internal.h>
 
 #define SKIP_KEEP_AIVE_COUNTER  3
 
