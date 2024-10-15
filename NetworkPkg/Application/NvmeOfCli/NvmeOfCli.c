@@ -1,7 +1,7 @@
 /** @file
   NvmeOf CLI is used to test NVMeOF Driver
 
-Copyright (c) 2020 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.
+Copyright (c) 2020 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.
 Copyright (c) 2022, Intel Corporation. All rights reserved.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
@@ -550,6 +550,10 @@ NvmeOfCliWriteData (
       } else {
         Position = Position + BLOCK_SIZE;
         Status   = FileHandleSetPosition (FileHandle, Position);
+        if (EFI_ERROR (Status)) {
+          break;
+        }
+
         SetMem (ReadWriteCliData.Payload, BLOCK_SIZE, 0);
         ReadWriteCliData.Startblock = ReadWriteCliData.Startblock + 1;
       }
@@ -704,8 +708,7 @@ NvmeOfCliSetAttempt (
   for ( ; !ShellFileHandleEof (FileHandle); Size = 1024) {
     Status = ShellFileHandleReadLine (FileHandle, ReadLine, &Size, TRUE, &Ascii);
     if (Status == EFI_BUFFER_TOO_SMALL) {
-      Status = EFI_SUCCESS;
-      Flag   = FALSE;
+      Flag = FALSE;
       break;
     }
 
