@@ -1,7 +1,7 @@
 /** @file
   Interface between Cli Application and Driver
 
-  Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+  Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
   Copyright (c) 2022 - 2023, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
@@ -10,7 +10,7 @@
 #include "NvmeOfDriver.h"
 #include "NvmeOfSpdk.h"
 #include "NvmeOfCliInterface.h"
-#include "spdk/nvme.h"
+#include "edk_nvme.h"
 #include "spdk/uuid.h"
 #include "nvme_internal.h"
 #include "NvmeOfBlockIo.h"
@@ -26,7 +26,7 @@ extern NVMEOF_CLI_CTRL_MAPPING  *CtrlrInfo;
 extern NVMEOF_NBFT  gNvmeOfNbftList[NID_MAX];
 extern UINT8        gNvmeOfNbftListIndex;
 
-extern const struct spdk_nvme_transport_ops  tcp_ops;
+extern const struct spdk_nvme_transport_ops  g_edk_nvme_tcp_ops;
 extern struct spdk_net_impl                  g_edksock_net_impl;
 
 /**
@@ -805,9 +805,9 @@ PrintIdentifyControllerData (
     ReturnCdata->ieee[2]
     );
   Print (L"Multi-path I/O\n");
-  Print (L"May have multiple subsystem ports:     %a\n", ReturnCdata->cmic.multi_port ? "Yes" : "No");
-  Print (L"May be connected to multiple hosts:    %a\n", ReturnCdata->cmic.multi_host ? "Yes" : "No");
-  Print (L"Associated with SR-IOV VF:             %a\n", ReturnCdata->cmic.sr_iov ? "Yes" : "No");
+  Print (L"May have multiple subsystem ports:           %a\n", ReturnCdata->cmic.multi_port ? "Yes" : "No");
+  Print (L"May be connected to multiple controllers:    %a\n", ReturnCdata->cmic.multi_ctrlr ? "Yes" : "No");
+  Print (L"Associated with SR-IOV VF:                   %a\n", ReturnCdata->cmic.sr_iov ? "Yes" : "No");
   Print (L"Max Data Transfer Size:                ");
   if (ReturnCdata->mdts == 0) {
     Print (L"Unlimited\n");
@@ -1201,18 +1201,20 @@ NvmeOfCliProbeCallback (
   IN struct spdk_nvme_ctrlr_opts          *Opts
   )
 {
-  EFI_GUID                      NvmeOfCliUuid = NVMEOF_CLI_UUID;
-  NVMEOF_DRIVER_DATA            *Private;
-  struct spdk_edk_sock_ctx      *Context;
-  NVMEOF_ATTEMPT_CONFIG_NVDATA  *AttemptData;
+  EFI_GUID                         NvmeOfCliUuid = NVMEOF_CLI_UUID;
+  NVMEOF_DRIVER_DATA               *Private;
+  struct spdk_edk_sock_ctx         *Context;
+  NVMEOF_ATTEMPT_CONFIG_NVDATA     *AttemptData;
+  struct edk_spdk_nvme_ctrlr_opts  *EdkOpts  = __edk_opts (Opts);
+  struct spdk_nvme_ctrlr_opts      *SpdkOpts = __spdk_opts (EdkOpts);
 
   DEBUG ((DEBUG_INFO, "Passthrough, Attaching to %a\n", Trid->traddr));
   // For CLI use Zero KATO
-  Opts->keep_alive_timeout_ms = 0;
-  CopyMem (Opts->extended_host_id, &NvmeOfCliUuid, sizeof (Opts->extended_host_id));
+  SpdkOpts->keep_alive_timeout_ms = 0;
+  CopyMem (SpdkOpts->extended_host_id, &NvmeOfCliUuid, sizeof (SpdkOpts->extended_host_id));
   if (ProbeconnectData != NULL) {
     if (ProbeconnectData->UseHostNqn == 1) {
-      CopyMem (Opts->hostnqn, ProbeconnectData->Hostnqn, sizeof (ProbeconnectData->Hostnqn));
+      CopyMem (SpdkOpts->hostnqn, ProbeconnectData->Hostnqn, sizeof (ProbeconnectData->Hostnqn));
     }
   }
 
@@ -1244,7 +1246,7 @@ NvmeOfCliProbeCallback (
       );
   }
 
-  Opts->sock_ctx = Context;
+  EdkOpts->sock_ctx = Context;
   return TRUE;
 }
 
@@ -1406,7 +1408,7 @@ NvmeOfCliProbeControllers (
   sprintf (Port, "%d", TargetPort);
   CopyMem (Trid->trsvcid, Port, sizeof (Port));
   if (nvme_get_transport (Trid->trstring) == NULL) {
-    spdk_nvme_transport_register (&tcp_ops);
+    spdk_nvme_transport_register (&g_edk_nvme_tcp_ops);
     spdk_net_impl_register (&g_edksock_net_impl, DEFAULT_SOCK_PRIORITY);
   }
 
