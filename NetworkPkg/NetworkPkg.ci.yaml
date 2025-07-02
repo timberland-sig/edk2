@@ -85,5 +85,6 @@
         "BLD_*_NETWORK_ISCSI_ENABLE": "TRUE",
         "BLD_*_NETWORK_PXE_BOOT_ENABLE": "TRUE",
         "BLD_*_NETWORK_NVMEOF_ENABLE": "TRUE",
+        "BLD_*_NETWORK_NVMEOF_ENABLE": "FALSE",
     }
 }
