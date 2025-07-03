@@ -150,7 +150,7 @@
   #
   # This flag is to enable or disable NVMeOF TCP feature.
   #
-  DEFINE NETWORK_NVMEOF_ENABLE = FALSE
+  DEFINE NETWORK_NVMEOF_ENABLE = TRUE
 !endif
 
 !if $(NETWORK_ENABLE) == TRUE
