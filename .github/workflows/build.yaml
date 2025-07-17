@@ -64,7 +64,7 @@ jobs:
           Build/OvmfX64/DEBUG_GCC5/X64/NvmeOfCli.efi
           Build/OvmfX64/DEBUG_GCC5/X64/VConfig.efi
       - name: store artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: |
             timberland-ovmf.zip
