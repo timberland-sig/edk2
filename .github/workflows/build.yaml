@@ -5,6 +5,7 @@ on:
     branches:
       - timberland_1.0_final
       - timberland_upstream-dev-full
+      - rel/timberland_1_0_0
 
 jobs:
   build:
