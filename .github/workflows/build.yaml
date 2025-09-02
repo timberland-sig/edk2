@@ -1,12 +1,13 @@
 name: Build and release EDK2
 on: 
   push:
+    branches:
+      - timberland_1.0_final
+      - rel/timberland_1_0_0
   pull_request:
     branches:
       - timberland_1.0_final
-      - timberland_upstream-dev-full
       - rel/timberland_1_0_0
-
 jobs:
   build:
     runs-on: ubuntu-22.04
