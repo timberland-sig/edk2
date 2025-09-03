@@ -87,7 +87,7 @@ jobs:
       TAG: ${{ needs.build.outputs.tag }}
     steps:
       - name: download build artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
       - name: create release notes
         run: |
           cat >relnotes.txt <<EOF
