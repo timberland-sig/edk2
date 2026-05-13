@@ -90,5 +90,5 @@
   MSFT:*_*_*_CC_FLAGS     = /wd4702
   MSFT:*_*_*_CC_FLAGS     = /std:c11
 
-  GCC:*_*_*_CC_FLAGS      = -Wno-error=pointer-sign
+  GCC:*_*_*_CC_FLAGS      = -std=gnu11 -Wno-error=pointer-sign
   #*_*_*_CC_FLAGS =  -nostdinc -Wunused-function -nostdlib
