@@ -21,10 +21,7 @@ jobs:
         # For cases where the latest changes are not to real code just the workflow
         # determine the last "real" commit
         run: |
-          C=HEAD
-          while ! git show --stat --pretty='' "$C" | head -n -1 | grep -q -E -v 'workflows/build.yaml|install.sh'; do
-              C="$C"~ 
-          done
+          C=$(git rev-list -1 HEAD -- :^.github/workflows/build.yaml :^install.sh)
           TAG=$(git describe --always --tags --match 'edk2-stable*' --abbrev=7 "$C")
           echo "TAG=release-$TAG" >> $GITHUB_ENV
           echo "TAG=release-$TAG" >> $GITHUB_OUTPUT
