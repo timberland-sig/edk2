@@ -55,7 +55,7 @@ jobs:
         run: bash build.sh
       - name: create zip file
         run: >-
-          zip -r timberland-ovmf.zip -j
+          zip -r timberland-ovmf-${{ env.TAG }}.zip -j
           Build/OvmfX64/DEBUG_GCC/FV/OVMF_CODE.fd
           Build/OvmfX64/DEBUG_GCC/FV/OVMF_VARS.fd
           Build/OvmfX64/DEBUG_GCC/X64/NvmeOfCli.efi
@@ -65,7 +65,7 @@ jobs:
         with:
           name: ovmf-build
           path: |
-            timberland-ovmf.zip
+            timberland-ovmf-${{ env.TAG }}.zip
             checksum.sha256
             top-commit.txt
 
@@ -105,23 +105,12 @@ jobs:
           sed 's/^/    /' checksum.sha256 >> relnotes.txt
           echo "### Top commit message:" >> relnotes.txt
           sed 's/^/    /' top-commit.txt >> relnotes.txt
-      - name: create release
-        uses: actions/create-release@v1
-        id: create_release
-        env:
-          GITHUB_TOKEN: "${{ github.token }}"
+      - name: Create release
+        uses: softprops/action-gh-release@v3
         with:
           draft: false
           prerelease: false
-          release_name: "Release ${{ env.TAG }}"
+          name: "Release ${{ env.TAG }}"
           tag_name: "${{ env.TAG }}"
           body_path: relnotes.txt
-      - name: upload release artifact
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: "${{ github.token }}"
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: timberland-ovmf.zip
-          asset_name: timberland-ovmf-${{ env.TAG }}.zip
-          asset_content_type: application/zip
+          files: timberland-ovmf-${{ env.TAG }}.zip
