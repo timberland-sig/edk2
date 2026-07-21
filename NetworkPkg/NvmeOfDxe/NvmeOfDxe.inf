@@ -128,3 +128,6 @@
   MSFT:*_*_*_CC_FLAGS     = /wd4477
   MSFT:*_*_*_CC_FLAGS     = /wd4245
   MSFT:*_*_*_CC_FLAGS     = /wd4133
+
+  GCC:*_*_*_CC_FLAGS      = -std=gnu11 -Wno-error=pointer-sign
+
