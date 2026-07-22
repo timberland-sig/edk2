@@ -1094,7 +1094,7 @@ nvme_ctrlr_opts_init (
   SET_FIELD (fabrics_connect_timeout_us);
   SET_FIELD (disable_read_ana_log_page);
   SET_FIELD (disable_read_changed_ns_list_log_page);
-  SET_FIELD_ARRAY (psk);
+  SET_FIELD (tls_psk);
 
   #undef FIELD_OK
   #undef SET_FIELD
