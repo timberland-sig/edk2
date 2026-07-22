@@ -680,8 +680,7 @@ nvme_qpair_manual_complete_request (
 
 void
 nvme_qpair_abort_queued_reqs (
-  struct spdk_nvme_qpair  *qpair,
-  uint32_t                dnr
+  struct spdk_nvme_qpair  *qpair
   )
 {
   struct nvme_request  *req;
@@ -703,7 +702,7 @@ nvme_qpair_abort_queued_reqs (
       req,
       SPDK_NVME_SCT_GENERIC,
       SPDK_NVME_SC_ABORTED_SQ_DELETION,
-      dnr,
+      qpair->abort_dnr,
       true
       );
   }
@@ -797,8 +796,8 @@ nvme_qpair_check_enabled (
     if ((qpair->ctrlr->trid.trtype == SPDK_NVME_TRANSPORT_PCIE) &&
         !qpair->is_new_qpair)
     {
-      nvme_qpair_abort_all_queued_reqs (qpair, 0);
-      nvme_transport_qpair_abort_reqs (qpair, 0);
+      nvme_qpair_abort_all_queued_reqs (qpair);
+      nvme_transport_qpair_abort_reqs (qpair);
     }
 
     nvme_qpair_set_state (qpair, NVME_QPAIR_ENABLED);
@@ -921,8 +920,8 @@ spdk_nvme_qpair_process_completions (
   {
     if (qpair->ctrlr->is_removed) {
       nvme_qpair_set_state (qpair, NVME_QPAIR_DESTROYING);
-      nvme_qpair_abort_all_queued_reqs (qpair, 0);
-      nvme_transport_qpair_abort_reqs (qpair, 0);
+      nvme_qpair_abort_all_queued_reqs (qpair);
+      nvme_transport_qpair_abort_reqs (qpair);
     }
 
     return -ENXIO;
@@ -1031,7 +1030,7 @@ nvme_qpair_init (
   qpair->trtype               = ctrlr->trid.trtype;
   qpair->is_new_qpair         = true;
   qpair->async                = async;
-  qpair->poll_status          = NULL;
+  qpair->fabric_poll_status   = NULL;
   qpair->num_outstanding_reqs = 0;
 
   STAILQ_INIT (&qpair->free_req);
@@ -1104,7 +1103,7 @@ nvme_qpair_deinit (
 {
   struct nvme_error_cmd  *cmd, *entry;
 
-  nvme_qpair_abort_queued_reqs (qpair, 0);
+  nvme_qpair_abort_queued_reqs (qpair);
   _nvme_qpair_complete_abort_queued_reqs (qpair);
   nvme_qpair_complete_error_reqs (qpair);
 
@@ -1335,12 +1334,11 @@ nvme_qpair_resubmit_request (
 
 void
 nvme_qpair_abort_all_queued_reqs (
-  struct spdk_nvme_qpair  *qpair,
-  uint32_t                dnr
+  struct spdk_nvme_qpair  *qpair
   )
 {
   nvme_qpair_complete_error_reqs (qpair);
-  nvme_qpair_abort_queued_reqs (qpair, dnr);
+  nvme_qpair_abort_queued_reqs (qpair);
   _nvme_qpair_complete_abort_queued_reqs (qpair);
   if (nvme_qpair_is_admin_queue (qpair)) {
     nvme_ctrlr_abort_queued_aborts (qpair->ctrlr);
