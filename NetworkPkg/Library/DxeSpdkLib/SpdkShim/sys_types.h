@@ -49,7 +49,7 @@ freeaddrinfo (
   struct addrinfo  *res
   );
 
-int
+const char *
 gai_strerror (
   int  ret
   );

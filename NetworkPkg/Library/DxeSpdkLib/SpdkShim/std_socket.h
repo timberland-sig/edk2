@@ -234,6 +234,138 @@ struct sockaddr_in {
 };
 
 /*
+ * addrinfo flags for getaddrinfo()
+ */
+#define AI_PASSIVE     0x0001
+#define AI_CANONNAME   0x0002
+#define AI_NUMERICHOST 0x0004
+#define AI_NUMERICSERV 0x0400
+
+/*
+ * Protocol families
+ */
+#ifndef PF_UNSPEC
+#define PF_UNSPEC  AF_UNSPEC
+#endif
+
+/*
+ * Protocol constants
+ */
+#define IPPROTO_TCP   6
+#define IPPROTO_IPV6  41
+
+/*
+ * TCP socket options
+ */
+#define TCP_NODELAY       1
+#define TCP_USER_TIMEOUT  18
+
+/*
+ * IPv6 socket options
+ */
+#define IPV6_V6ONLY  26
+
+/*
+ * poll() infrastructure
+ */
+#define POLLIN    0x0001
+#define POLLOUT   0x0004
+#define POLLERR   0x0008
+#define POLLHUP   0x0010
+#define POLLNVAL  0x0020
+
+typedef unsigned int nfds_t;
+
+struct pollfd {
+  int      fd;
+  short    events;
+  short    revents;
+};
+
+static inline int
+socket (
+  int  domain,
+  int  type,
+  int  protocol
+  )
+{
+  return -1;
+}
+
+static inline int
+bind (
+  int                    fd,
+  const struct sockaddr  *addr,
+  socklen_t              addrlen
+  )
+{
+  return -1;
+}
+
+static inline int
+connect (
+  int                    fd,
+  const struct sockaddr  *addr,
+  socklen_t              addrlen
+  )
+{
+  return -1;
+}
+
+static inline int
+setsockopt (
+  int         fd,
+  int         level,
+  int         optname,
+  const void  *optval,
+  socklen_t   optlen
+  )
+{
+  return -1;
+}
+
+static inline int
+getsockopt (
+  int        fd,
+  int        level,
+  int        optname,
+  void       *optval,
+  socklen_t  *optlen
+  )
+{
+  return -1;
+}
+
+static inline int
+poll (
+  struct pollfd  *fds,
+  nfds_t         nfds,
+  int            timeout
+  )
+{
+  return -1;
+}
+
+static inline int
+listen (
+  int  fd,
+  int  backlog
+  )
+{
+  return -1;
+}
+
+static inline int
+accept (
+  int              fd,
+  struct sockaddr  *addr,
+  socklen_t        *addrlen
+  )
+{
+  return -1;
+}
+
+/*
  * epoll constants for spdk/thread.h interrupt events
  */
 #define EPOLLIN   0x001

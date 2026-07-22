@@ -266,6 +266,96 @@ dummy_disconnected_qpair_cb (
 }
 
 int
+nvme_wait_for_completion_poll (
+  struct spdk_nvme_qpair              *qpair,
+  struct nvme_completion_poll_status  *status
+  )
+{
+  int  rc;
+
+  if (nvme_qpair_is_admin_queue (qpair)) {
+    nvme_ctrlr_lock (qpair->ctrlr);
+  }
+
+  if (qpair->poll_group) {
+    rc = (int)spdk_nvme_poll_group_process_completions (
+                qpair->poll_group->group,
+                0,
+                dummy_disconnected_qpair_cb
+                );
+  } else {
+    rc = spdk_nvme_qpair_process_completions (qpair, 0);
+  }
+
+  if (nvme_qpair_is_admin_queue (qpair)) {
+    nvme_ctrlr_unlock (qpair->ctrlr);
+  }
+
+  if (rc < 0) {
+    status->cpl.status.sct = SPDK_NVME_SCT_GENERIC;
+    status->cpl.status.sc  = SPDK_NVME_SC_ABORTED_SQ_DELETION;
+    goto error;
+  }
+
+  if (!status->done && status->timeout_tsc && (spdk_get_ticks () > status->timeout_tsc)) {
+    goto error;
+  }
+
+  if (qpair->ctrlr->trid.trtype == SPDK_NVME_TRANSPORT_PCIE) {
+    union spdk_nvme_csts_register  csts = spdk_nvme_ctrlr_get_regs_csts (qpair->ctrlr);
+    if (csts.raw == SPDK_NVME_INVALID_REGISTER_VALUE) {
+      status->cpl.status.sct = SPDK_NVME_SCT_GENERIC;
+      status->cpl.status.sc  = SPDK_NVME_SC_INTERNAL_DEVICE_ERROR;
+      goto error;
+    }
+  }
+
+  if (!status->done) {
+    return -EAGAIN;
+  } else if (spdk_nvme_cpl_is_error (&status->cpl)) {
+    return -EIO;
+  } else {
+    return 0;
+  }
+
+error:
+  if (!status->done) {
+    status->timed_out = true;
+  }
+
+  return -ECANCELED;
+}
+
+int
+nvme_wait_for_adminq_completion (
+  struct spdk_nvme_ctrlr              *ctrlr,
+  struct nvme_completion_poll_status  *status,
+  bool                                release
+  )
+{
+  uint64_t  timeout_in_usecs = ctrlr->opts.admin_timeout_ms * 1000;
+  int       rc;
+
+  if (timeout_in_usecs) {
+    status->timeout_tsc = spdk_get_ticks () + timeout_in_usecs *
+                          spdk_get_ticks_hz () / SPDK_SEC_TO_USEC;
+  } else {
+    status->timeout_tsc = 0;
+  }
+
+  status->cpl.status_raw = 0;
+  do {
+    rc = nvme_wait_for_completion_poll (ctrlr->adminq, status);
+  } while (rc == -EAGAIN);
+
+  if (release && !status->timed_out) {
+    free (status);
+  }
+
+  return rc;
+}
+
+int
 nvme_wait_for_completion_robust_lock_timeout_poll (
   struct spdk_nvme_qpair              *qpair,
   struct nvme_completion_poll_status  *status,

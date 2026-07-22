@@ -8,6 +8,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 #include "spdk/stdinc.h"
 #include "spdk/util.h"
+#include "spdk/fd_group.h"
 
 #if defined (_MSC_VER)
 
@@ -230,12 +231,12 @@ freeaddrinfo (
   FreePool (res);
 }
 
-int
+const char *
 gai_strerror (
   int  ret
   )
 {
-  return 0;
+  return "";
 }
 
 time_t
@@ -244,4 +245,25 @@ time (
   )
 {
   return 1;
+}
+
+int
+spdk_fd_group_add_ext (
+  struct spdk_fd_group           *fgrp,
+  int                            efd,
+  spdk_fd_fn                     fn,
+  void                           *arg,
+  const char                     *name,
+  struct spdk_event_handler_opts *opts
+  )
+{
+  return -1;
+}
+
+void
+spdk_fd_group_remove (
+  struct spdk_fd_group  *fgrp,
+  int                   efd
+  )
+{
 }
