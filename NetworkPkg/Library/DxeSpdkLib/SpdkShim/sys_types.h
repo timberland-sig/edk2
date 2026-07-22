@@ -98,4 +98,34 @@ __builtin_popcountll (
 
 #endif
 
+#define EFD_NONBLOCK  00004000
+#define EFD_CLOEXEC   02000000
+
+static inline int
+eventfd (
+  unsigned int  initval,
+  int           flags
+  )
+{
+  return -1;
+}
+
+static inline ssize_t
+write (
+  int         fd,
+  const void  *buf,
+  size_t      count
+  )
+{
+  return -1;
+}
+
+static inline int
+close (
+  int  fd
+  )
+{
+  return 0;
+}
+
 #endif
