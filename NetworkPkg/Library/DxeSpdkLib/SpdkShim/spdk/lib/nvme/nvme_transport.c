@@ -644,7 +644,7 @@ nvme_transport_ctrlr_disconnect_qpair_done (
   if ((qpair->active_proc == nvme_ctrlr_get_current_process (qpair->ctrlr)) ||
       nvme_qpair_is_admin_queue (qpair))
   {
-    nvme_qpair_abort_all_queued_reqs (qpair, 0);
+    nvme_qpair_abort_all_queued_reqs (qpair);
   }
 
   nvme_qpair_set_state (qpair, NVME_QPAIR_DISCONNECTED);
@@ -669,19 +669,17 @@ nvme_transport_ctrlr_get_memory_domains (
 
 void
 nvme_transport_qpair_abort_reqs (
-  struct spdk_nvme_qpair  *qpair,
-  uint32_t                dnr
+  struct spdk_nvme_qpair  *qpair
   )
 {
   const struct spdk_nvme_transport  *transport;
 
-  assert (dnr <= 1);
   if (spdk_likely (!nvme_qpair_is_admin_queue (qpair))) {
-    qpair->transport->ops.qpair_abort_reqs (qpair, dnr);
+    qpair->transport->ops.qpair_abort_reqs (qpair, qpair->abort_dnr);
   } else {
     transport = nvme_get_transport (qpair->ctrlr->trid.trstring);
     assert (transport != NULL);
-    transport->ops.qpair_abort_reqs (qpair, dnr);
+    transport->ops.qpair_abort_reqs (qpair, qpair->abort_dnr);
   }
 }
 
@@ -779,19 +777,6 @@ nvme_transport_poll_group_create (
   }
 
   return group;
-}
-
-struct spdk_nvme_transport_poll_group *
-nvme_transport_qpair_get_optimal_poll_group (
-  const struct spdk_nvme_transport  *transport,
-  struct spdk_nvme_qpair            *qpair
-  )
-{
-  if (transport->ops.qpair_get_optimal_poll_group) {
-    return transport->ops.qpair_get_optimal_poll_group (qpair);
-  } else {
-    return NULL;
-  }
 }
 
 int
