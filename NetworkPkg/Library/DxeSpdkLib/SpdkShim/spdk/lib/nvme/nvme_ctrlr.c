@@ -3748,7 +3748,7 @@ nvme_ctrlr_queue_async_event (
   const struct spdk_nvme_cpl  *cpl
   )
 {
-  struct  spdk_nvme_ctrlr_aer_completion_list  *nvme_event;
+  struct  spdk_nvme_ctrlr_aer_completion  *nvme_event;
   struct spdk_nvme_ctrlr_process               *proc;
 
   /* Add async event to each process objects event list */
@@ -3771,7 +3771,7 @@ nvme_ctrlr_complete_queued_async_events (
   struct spdk_nvme_ctrlr  *ctrlr
   )
 {
-  struct  spdk_nvme_ctrlr_aer_completion_list  *nvme_event, *nvme_event_tmp;
+  struct  spdk_nvme_ctrlr_aer_completion  *nvme_event, *nvme_event_tmp;
   struct spdk_nvme_ctrlr_process               *active_proc;
 
   active_proc = nvme_ctrlr_get_current_process (ctrlr);
@@ -3780,7 +3780,7 @@ nvme_ctrlr_complete_queued_async_events (
     STAILQ_REMOVE (
       &active_proc->async_events,
       nvme_event,
-      spdk_nvme_ctrlr_aer_completion_list,
+      spdk_nvme_ctrlr_aer_completion,
       link
       );
     nvme_ctrlr_process_async_event (ctrlr, &nvme_event->cpl);
@@ -4067,7 +4067,7 @@ nvme_ctrlr_cleanup_process (
 {
   struct nvme_request                         *req, *tmp_req;
   struct spdk_nvme_qpair                      *qpair, *tmp_qpair;
-  struct spdk_nvme_ctrlr_aer_completion_list  *event;
+  struct spdk_nvme_ctrlr_aer_completion  *event;
 
   STAILQ_FOREACH_SAFE (req, &proc->active_reqs, stailq, tmp_req) {
     STAILQ_REMOVE (&proc->active_reqs, req, nvme_request, stailq);
@@ -4614,7 +4614,7 @@ nvme_ctrlr_process_init (
            * resubmitted while the controller is resetting and subsequent commands
            * would get queued too.
            */
-          nvme_qpair_abort_queued_reqs (ctrlr->adminq, 0);
+          nvme_qpair_abort_queued_reqs (ctrlr->adminq);
           break;
         case NVME_QPAIR_DISCONNECTING:
           assert (ctrlr->adminq->async == true);
