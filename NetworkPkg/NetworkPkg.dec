@@ -27,8 +27,8 @@
   Library/DxeSpdkLib/SpdkShim/
   Library/DxeSpdkLib/SpdkShim/sys/
   Library/DxeSpdkLib/SpdkShim/spdk/
-  Library/DxeSpdkLib/spdk/include/
-  Library/DxeSpdkLib/spdk/lib/nvme/
+  Library/DxeSpdkLib/spdk_import/include/
+  Library/DxeSpdkLib/spdk_import/lib/nvme/
 
 [LibraryClasses]
   ##  @libraryclass  IpIo layer upon EFI IP4 Protocol.
