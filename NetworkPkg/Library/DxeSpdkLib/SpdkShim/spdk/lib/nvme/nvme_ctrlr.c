@@ -1635,6 +1635,10 @@ nvme_ctrlr_state_string (
       return "wait for supported INTEL log pages";
     case NVME_CTRLR_STATE_SET_SUPPORTED_FEATURES:
       return "set supported features";
+    case NVME_CTRLR_STATE_SET_HOST_FEATURE:
+      return "set host behavior support feature";
+    case NVME_CTRLR_STATE_WAIT_FOR_SET_HOST_FEATURE:
+      return "wait for set host behavior support feature";
     case NVME_CTRLR_STATE_SET_DB_BUF_CFG:
       return "set doorbell buffer config";
     case NVME_CTRLR_STATE_WAIT_FOR_DB_BUF_CFG:
@@ -1649,6 +1653,8 @@ nvme_ctrlr_state_string (
       return "ready";
     case NVME_CTRLR_STATE_ERROR:
       return "error";
+    case NVME_CTRLR_STATE_DISCONNECTED:
+      return "disconnected";
   }
 
   return "unknown";
