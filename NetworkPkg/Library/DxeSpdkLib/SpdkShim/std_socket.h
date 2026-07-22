@@ -233,4 +233,11 @@ struct sockaddr_in {
   __int8_t          sin_zero[8];
 };
 
+/*
+ * epoll constants for spdk/thread.h interrupt events
+ */
+#define EPOLLIN   0x001
+#define EPOLLOUT  0x004
+#define EPOLLET   (1U << 31)
+
 #endif
