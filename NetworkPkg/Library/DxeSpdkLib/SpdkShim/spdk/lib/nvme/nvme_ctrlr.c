@@ -949,21 +949,12 @@ nvme_ctrlr_update_ana_log_page (
     return rc;
   }
 
-  if (nvme_wait_for_completion_robust_lock_timeout (
-        ctrlr->adminq,
-        status,
-        &ctrlr->ctrlr_lock,
-        ctrlr->opts.admin_timeout_ms * 1000
-        ))
-  {
-    if (!status->timed_out) {
-      free (status);
-    }
-
-    return -EIO;
+  rc = nvme_wait_for_adminq_completion (ctrlr, status, true);
+  if (rc) {
+    NVME_CTRLR_ERRLOG (ctrlr, "wait for spdk_nvme_ctrlr_cmd_get_log_page failed\n");
+    return rc;
   }
 
-  free (status);
   return 0;
 }
 
@@ -1102,6 +1093,7 @@ nvme_ctrlr_set_arbitration_feature (
 {
   uint32_t                            cdw11;
   struct nvme_completion_poll_status  *status;
+  int                                 rc;
 
   if (ctrlr->opts.arbitration_burst == 0) {
     return;
@@ -1142,17 +1134,9 @@ nvme_ctrlr_set_arbitration_feature (
     return;
   }
 
-  if (nvme_wait_for_completion_timeout (
-        ctrlr->adminq,
-        status,
-        ctrlr->opts.admin_timeout_ms * 1000
-        ))
-  {
-    NVME_CTRLR_ERRLOG (ctrlr, "Timeout to set arbitration feature\n");
-  }
-
-  if (!status->timed_out) {
-    free (status);
+  rc = nvme_wait_for_adminq_completion (ctrlr, status, true);
+  if (rc) {
+    NVME_CTRLR_ERRLOG (ctrlr, "wait for spdk_nvme_ctrlr_cmd_set_feature failed\n");
   }
 }
 
@@ -3686,15 +3670,7 @@ nvme_ctrlr_clear_changed_ns_log (
     goto free_buffer;
   }
 
-  rc = nvme_wait_for_completion_timeout (
-         ctrlr->adminq,
-         status,
-         ctrlr->opts.admin_timeout_ms * 1000
-         );
-  if (!status->timed_out) {
-    free (status);
-  }
-
+  rc = nvme_wait_for_adminq_completion (ctrlr, status, true);
   if (rc) {
     NVME_CTRLR_ERRLOG (ctrlr, "wait for spdk_nvme_ctrlr_cmd_get_log_page failed: rc=%d\n", rc);
     goto free_buffer;
@@ -5574,16 +5550,11 @@ spdk_nvme_ctrlr_attach_ns (
     return res;
   }
 
-  if (nvme_wait_for_completion_robust_lock (ctrlr->adminq, status, &ctrlr->ctrlr_lock)) {
+  res = nvme_wait_for_adminq_completion (ctrlr, status, true);
+  if (res) {
     NVME_CTRLR_ERRLOG (ctrlr, "spdk_nvme_ctrlr_attach_ns failed!\n");
-    if (!status->timed_out) {
-      free (status);
-    }
-
-    return -ENXIO;
+    return res;
   }
-
-  free (status);
 
   res = nvme_ctrlr_identify_active_ns (ctrlr);
   if (res) {
@@ -5631,16 +5602,11 @@ spdk_nvme_ctrlr_detach_ns (
     return res;
   }
 
-  if (nvme_wait_for_completion_robust_lock (ctrlr->adminq, status, &ctrlr->ctrlr_lock)) {
+  res = nvme_wait_for_adminq_completion (ctrlr, status, true);
+  if (res) {
     NVME_CTRLR_ERRLOG (ctrlr, "spdk_nvme_ctrlr_detach_ns failed!\n");
-    if (!status->timed_out) {
-      free (status);
-    }
-
-    return -ENXIO;
+    return res;
   }
-
-  free (status);
 
   return nvme_ctrlr_identify_active_ns (ctrlr);
 }
@@ -5667,17 +5633,16 @@ spdk_nvme_ctrlr_create_ns (
     return 0;
   }
 
-  if (nvme_wait_for_completion_robust_lock (ctrlr->adminq, status, &ctrlr->ctrlr_lock)) {
-    NVME_CTRLR_ERRLOG (ctrlr, "spdk_nvme_ctrlr_create_ns failed!\n");
-    if (!status->timed_out) {
-      free (status);
-    }
-
-    return 0;
+  res = nvme_wait_for_adminq_completion (ctrlr, status, false);
+  nsid = status->cpl.cdw0;
+  if (!status->timed_out) {
+    free (status);
   }
 
-  nsid = status->cpl.cdw0;
-  free (status);
+  if (res) {
+    NVME_CTRLR_ERRLOG (ctrlr, "spdk_nvme_ctrlr_create_ns failed!\n");
+    return 0;
+  }
 
   assert (nsid > 0);
 
@@ -5710,16 +5675,11 @@ spdk_nvme_ctrlr_delete_ns (
     return res;
   }
 
-  if (nvme_wait_for_completion_robust_lock (ctrlr->adminq, status, &ctrlr->ctrlr_lock)) {
+  res = nvme_wait_for_adminq_completion (ctrlr, status, true);
+  if (res) {
     NVME_CTRLR_ERRLOG (ctrlr, "spdk_nvme_ctrlr_delete_ns failed!\n");
-    if (!status->timed_out) {
-      free (status);
-    }
-
-    return -ENXIO;
+    return res;
   }
-
-  free (status);
 
   return nvme_ctrlr_identify_active_ns (ctrlr);
 }
@@ -5752,16 +5712,11 @@ spdk_nvme_ctrlr_format (
     return res;
   }
 
-  if (nvme_wait_for_completion_robust_lock (ctrlr->adminq, status, &ctrlr->ctrlr_lock)) {
+  res = nvme_wait_for_adminq_completion (ctrlr, status, true);
+  if (res) {
     NVME_CTRLR_ERRLOG (ctrlr, "spdk_nvme_ctrlr_format failed!\n");
-    if (!status->timed_out) {
-      free (status);
-    }
-
-    return -ENXIO;
+    return res;
   }
-
-  free (status);
 
   return spdk_nvme_ctrlr_reset (ctrlr);
 }
@@ -5832,13 +5787,14 @@ spdk_nvme_ctrlr_update_firmware (
       return res;
     }
 
-    if (nvme_wait_for_completion_robust_lock (ctrlr->adminq, status, &ctrlr->ctrlr_lock)) {
+    res = nvme_wait_for_adminq_completion (ctrlr, status, false);
+    if (res) {
       NVME_CTRLR_ERRLOG (ctrlr, "spdk_nvme_ctrlr_fw_image_download failed!\n");
       if (!status->timed_out) {
         free (status);
       }
 
-      return -ENXIO;
+      return res;
     }
 
     p               = (char *)p + transfer;
@@ -5863,7 +5819,7 @@ spdk_nvme_ctrlr_update_firmware (
     return res;
   }
 
-  res = nvme_wait_for_completion_robust_lock (ctrlr->adminq, status, &ctrlr->ctrlr_lock);
+  res = nvme_wait_for_adminq_completion (ctrlr, status, false);
 
   memcpy (completion_status, &status->cpl.status, sizeof (struct spdk_nvme_status));
 
@@ -6286,16 +6242,11 @@ spdk_nvme_ctrlr_security_receive (
     return res;
   }
 
-  if (nvme_wait_for_completion_robust_lock (ctrlr->adminq, status, &ctrlr->ctrlr_lock)) {
+  res = nvme_wait_for_adminq_completion (ctrlr, status, true);
+  if (res) {
     NVME_CTRLR_ERRLOG (ctrlr, "spdk_nvme_ctrlr_cmd_security_receive failed!\n");
-    if (!status->timed_out) {
-      free (status);
-    }
-
-    return -ENXIO;
+    return res;
   }
-
-  free (status);
 
   return 0;
 }
@@ -6334,16 +6285,11 @@ spdk_nvme_ctrlr_security_send (
     return res;
   }
 
-  if (nvme_wait_for_completion_robust_lock (ctrlr->adminq, status, &ctrlr->ctrlr_lock)) {
+  res = nvme_wait_for_adminq_completion (ctrlr, status, true);
+  if (res) {
     NVME_CTRLR_ERRLOG (ctrlr, "spdk_nvme_ctrlr_cmd_security_send failed!\n");
-    if (!status->timed_out) {
-      free (status);
-    }
-
-    return -ENXIO;
+    return res;
   }
-
-  free (status);
 
   return 0;
 }
