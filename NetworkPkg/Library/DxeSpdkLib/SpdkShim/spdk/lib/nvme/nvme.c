@@ -733,7 +733,7 @@ nvme_ctrlr_probe (
   spdk_nvme_ctrlr_get_default_ctrlr_opts (&opts, sizeof (opts));
 
   if (!probe_ctx->probe_cb || probe_ctx->probe_cb (probe_ctx->cb_ctx, trid, &opts)) {
-    ctrlr = nvme_get_ctrlr_by_trid_unsafe (trid);
+    ctrlr = nvme_get_ctrlr_by_trid_unsafe (trid, opts.hostnqn);
     if (ctrlr) {
       /* This ctrlr already exists. */
 
@@ -848,13 +848,14 @@ nvme_init_controllers (
 /* This function must not be called while holding g_spdk_nvme_driver->lock */
 static struct spdk_nvme_ctrlr *
 nvme_get_ctrlr_by_trid (
-  const struct spdk_nvme_transport_id  *trid
+  const struct spdk_nvme_transport_id  *trid,
+  const char                           *hostnqn
   )
 {
   struct spdk_nvme_ctrlr  *ctrlr;
 
   nvme_robust_mutex_lock (&g_spdk_nvme_driver->lock);
-  ctrlr = nvme_get_ctrlr_by_trid_unsafe (trid);
+  ctrlr = nvme_get_ctrlr_by_trid_unsafe (trid, hostnqn);
   nvme_robust_mutex_unlock (&g_spdk_nvme_driver->lock);
 
   return ctrlr;
@@ -863,23 +864,36 @@ nvme_get_ctrlr_by_trid (
 /* This function must be called while holding g_spdk_nvme_driver->lock */
 struct spdk_nvme_ctrlr *
 nvme_get_ctrlr_by_trid_unsafe (
-  const struct spdk_nvme_transport_id  *trid
+  const struct spdk_nvme_transport_id  *trid,
+  const char                           *hostnqn
   )
 {
   struct spdk_nvme_ctrlr  *ctrlr;
 
   /* Search per-process list */
   TAILQ_FOREACH (ctrlr, &g_nvme_attached_ctrlrs, tailq) {
-    if (spdk_nvme_transport_id_compare (&ctrlr->trid, trid) == 0) {
-      return ctrlr;
+    if (spdk_nvme_transport_id_compare (&ctrlr->trid, trid) != 0) {
+      continue;
     }
+
+    if (hostnqn && strcmp (ctrlr->opts.hostnqn, hostnqn) != 0) {
+      continue;
+    }
+
+    return ctrlr;
   }
 
   /* Search multi-process shared list */
   TAILQ_FOREACH (ctrlr, &g_spdk_nvme_driver->shared_attached_ctrlrs, tailq) {
-    if (spdk_nvme_transport_id_compare (&ctrlr->trid, trid) == 0) {
-      return ctrlr;
+    if (spdk_nvme_transport_id_compare (&ctrlr->trid, trid) != 0) {
+      continue;
     }
+
+    if (hostnqn && strcmp (ctrlr->opts.hostnqn, hostnqn) != 0) {
+      continue;
+    }
+
+    return ctrlr;
   }
 
   return NULL;
@@ -1121,7 +1135,7 @@ spdk_nvme_connect (
     return NULL;
   }
 
-  ctrlr = nvme_get_ctrlr_by_trid (trid);
+  ctrlr = nvme_get_ctrlr_by_trid (trid, opts_local_p ? opts_local.hostnqn : NULL);
 
   return ctrlr;
 }
