@@ -3577,7 +3577,7 @@ nvme_ctrlr_set_host_id (
     return 0;
   }
 
-  if (ctrlr->cdata.ctratt.host_id_exhid_supported) {
+  if (ctrlr->cdata.ctratt.bits.host_id_exhid_supported) {
     NVME_CTRLR_DEBUGLOG (ctrlr, "Using 128-bit extended host identifier\n");
     host_id      = ctrlr->opts.extended_host_id;
     host_id_size = sizeof (ctrlr->opts.extended_host_id);
