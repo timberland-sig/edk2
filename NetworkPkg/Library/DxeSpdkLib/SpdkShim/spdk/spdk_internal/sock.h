@@ -231,8 +231,9 @@ spdk_sock_request_complete (
   bool  closed;
   int   rc = 0;
 
-  req->internal.offset   = 0;
-  req->internal.is_zcopy = 0;
+  req->internal.offset       = 0;
+  req->internal.zcopy_idx    = 0;
+  req->internal.pending_zcopy = false;
 
   closed = sock->flags.closed;
   sock->cb_cnt++;
