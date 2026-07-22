@@ -44,5 +44,6 @@ extern "C" {
 #define EALREADY      20  // EFI_ALREADY_STARTED
 #define ENOSYS        3   // EFI_UNSUPPORTED
 #define ETIMEDOUT     18  // EFI_TIMEOUT
+#define ENOKEY        126 // Key not available
 
 #endif
