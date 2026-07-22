@@ -2776,6 +2776,10 @@ DevPathFromTextNvmeOf (
                                                     NodeLength
                                                     );
 
+  if (NvmeOfDevPath == NULL) {
+    return (EFI_DEVICE_PATH_PROTOCOL *)NvmeOfDevPath;
+  }
+
   AsciiStr = NvmeOfDevPath->TargetName;
   StrToAscii (NameStr, &AsciiStr);
 
