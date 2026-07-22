@@ -23,33 +23,33 @@
 [Sources]
 # Do not change order
   SpdkShim/sys_types.c
-  spdk/lib/util/crc16.c
-  spdk/lib/util/crc32.c
-  spdk/lib/util/crc32c.c
-  spdk/lib/util/bit_array.c
+  spdk_import/lib/util/crc16.c
+  spdk_import/lib/util/crc32.c
+  spdk_import/lib/util/crc32c.c
+  spdk_import/lib/util/bit_array.c
   SpdkShim/spdk/lib/nvme/nvme.c
   SpdkShim/edk_nvme.c
-  spdk/lib/nvme/nvme_ctrlr_cmd.c
+  spdk_import/lib/nvme/nvme_ctrlr_cmd.c
   SpdkShim/spdk/lib/nvme/nvme_ctrlr.c
-  spdk/lib/nvme/nvme_ctrlr_ocssd_cmd.c
+  spdk_import/lib/nvme/nvme_ctrlr_ocssd_cmd.c
   SpdkShim/spdk/lib/nvme/nvme_fabric.c
-  spdk/lib/nvme/nvme_io_msg.c
-  spdk/lib/nvme/nvme_ns.c
-  spdk/lib/nvme/nvme_ns_cmd.c
-  spdk/lib/nvme/nvme_ns_ocssd_cmd.c
-  spdk/lib/nvme/nvme_poll_group.c
+  spdk_import/lib/nvme/nvme_io_msg.c
+  spdk_import/lib/nvme/nvme_ns.c
+  spdk_import/lib/nvme/nvme_ns_cmd.c
+  spdk_import/lib/nvme/nvme_ns_ocssd_cmd.c
+  spdk_import/lib/nvme/nvme_poll_group.c
   SpdkShim/spdk/lib/nvme/nvme_qpair.c
-  spdk/lib/nvme/nvme_quirks.c
+  spdk_import/lib/nvme/nvme_quirks.c
   SpdkShim/spdk/lib/nvme/nvme_transport.c
   SpdkShim/spdk/lib/nvme/nvme_tcp.c
   SpdkShim/pthread_shim.c
   SpdkShim/json_write.c
-  spdk/lib/sock/sock.c
+  spdk_import/lib/sock/sock.c
   SpdkShim/edk_sock.c
   SpdkShim/env.c
   SpdkShim/dif_shim.c
   SpdkShim/uuid.c
-  spdk/lib/util/string.c
+  spdk_import/lib/util/string.c
   SpdkShim/std_string.c
   SpdkShim/edk_log.c
   SpdkShim/edk_nvme_ctrlr.c
