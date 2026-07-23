@@ -506,16 +506,22 @@ _sock_flush (
 
   req = TAILQ_FIRST (&s_sock->queued_reqs);
   for (index = 0; index < req_counter; index++) {
-    s_sock->cb_cnt++;
-    req->cb_fn (req->cb_arg, 0);
+    struct spdk_sock_request  *next = TAILQ_NEXT (req, internal.link);
+
     TAILQ_REMOVE (&s_sock->queued_reqs, req, internal.link);
-    s_sock->cb_cnt--;
+ #ifdef DEBUG
+    req->internal.curr_list = NULL;
+ #endif
     s_sock->queued_iovcnt -= req->iovcnt;
     if (s_sock->queued_iovcnt < 0) {
       s_sock->queued_iovcnt = 0;
     }
 
-    req = TAILQ_NEXT (req, internal.link);
+    s_sock->cb_cnt++;
+    req->cb_fn (req->cb_arg, 0);
+    s_sock->cb_cnt--;
+
+    req = next;
   }
 
   free (writebuf);
@@ -970,6 +976,9 @@ struct spdk_net_impl  g_edksock_net_impl = {
   .group_impl_close       = edk_sock_group_impl_close,
   .get_opts               = edk_sock_impl_get_opts,
   .set_opts               = edk_sock_impl_set_opts,
+  /* Fields added in SPDK v26: init, get_interface_name, get_numa_id,
+   * connect_async, recv_next, group_impl_get_interruptfd are left NULL
+   * (not used by the EDK2 socket implementation). */
 };
 
 /**
