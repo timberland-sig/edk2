@@ -473,7 +473,7 @@ NvmeOfProbeControllers (
   CopyMem (Trid->trsvcid, Port, sizeof (Port));
   if (nvme_get_transport (Trid->trstring) == NULL) {
     spdk_nvme_transport_register (&g_edk_nvme_tcp_ops);
-    spdk_net_impl_register (&g_edksock_net_impl, DEFAULT_SOCK_PRIORITY);
+    spdk_net_impl_register (&g_edksock_net_impl);
   }
 
   if ((IpVersion == IP_VERSION_4) &&

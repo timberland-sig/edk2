@@ -15,6 +15,8 @@
 #include "spdk/queue.h"
 #include "spdk/likely.h"
 
+struct spdk_fd_group;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -46,9 +48,17 @@ struct spdk_sock {
   struct spdk_sock_impl_opts     impl_opts;
 };
 
+struct spdk_sock_group_provided_buf {
+  size_t                                      len;
+  void                                        *ctx;
+  STAILQ_ENTRY (spdk_sock_group_provided_buf) link;
+};
+
 struct spdk_sock_group {
-  STAILQ_HEAD ( , spdk_sock_group_impl)     group_impls;
-  void    *ctx;
+  STAILQ_HEAD ( , spdk_sock_group_impl)          group_impls;
+  STAILQ_HEAD ( , spdk_sock_group_provided_buf)  pool;
+  struct spdk_fd_group                           *fgrp;
+  void                                           *ctx;
 };
 
 struct spdk_sock_group_impl {
@@ -65,7 +75,9 @@ struct spdk_sock_map {
 
 struct spdk_net_impl {
   const char    *name;
-  int           priority;
+  int           (*init)(
+    struct spdk_sock_initialize_opts  *opts
+    );
 
   int           (*getaddr)(
     struct spdk_sock  *sock,
@@ -76,10 +88,23 @@ struct spdk_net_impl {
     int               clen,
     uint16_t          *cport
     );
+  const char                     *(*get_interface_name)(
+    struct spdk_sock  *sock
+    );
+  int32_t                        (*get_numa_id)(
+    struct spdk_sock  *sock
+    );
   struct spdk_sock               *(*connect)(
     const char             *ip,
     int                    port,
     struct spdk_sock_opts  *opts
+    );
+  struct spdk_sock               *(*connect_async)(
+    const char                *ip,
+    int                       port,
+    struct spdk_sock_opts     *opts,
+    spdk_sock_connect_cb_fn   cb_fn,
+    void                      *cb_arg
     );
   struct spdk_sock               *(*listen)(
     const char             *ip,
@@ -108,6 +133,11 @@ struct spdk_net_impl {
     int               iovcnt
     );
 
+  int                            (*recv_next)(
+    struct spdk_sock  *sock,
+    void              **buf,
+    void              **ctx
+    );
   void                           (*writev_async)(
     struct spdk_sock          *sock,
     struct spdk_sock_request  *req
@@ -163,6 +193,9 @@ struct spdk_net_impl {
     int                          max_events,
     struct spdk_sock             **socks
     );
+  int                            (*group_impl_get_interruptfd)(
+    struct spdk_sock_group_impl  *group
+    );
   int                            (*group_impl_close)(
     struct spdk_sock_group_impl  *group
     );
@@ -181,15 +214,28 @@ struct spdk_net_impl {
 
 void
 spdk_net_impl_register (
-  struct spdk_net_impl  *impl,
-  int                   priority
+  struct spdk_net_impl  *impl
   );
 
-#define SPDK_NET_IMPL_REGISTER(name, impl, priority) \
+#define SPDK_NET_IMPL_REGISTER(name, impl) \
 static void __attribute__((constructor)) net_impl_register_##name(void) \
 { \
-        spdk_net_impl_register(impl, priority); \
+        spdk_net_impl_register(impl); \
 }
+
+#define SPDK_NET_IMPL_REGISTER_DEFAULT(name, impl) \
+static void __attribute__((constructor)) net_impl_register_default_##name(void) \
+{ \
+        spdk_net_impl_register(impl); \
+        spdk_sock_set_default_impl(#name); \
+}
+
+size_t
+spdk_sock_group_get_buf (
+  struct spdk_sock_group  *group,
+  void                    **buf,
+  void                    **ctx
+  );
 
 static inline void
 spdk_sock_request_queue (
