@@ -1998,12 +1998,11 @@ NvmeOfInitializeGlobalNvData (
   )
 {
   NVMEOF_GLOBAL_DATA  *NvmeOfGlobalData;
-  EFI_GUID            *SystemGuid;
-  EFI_GUID            HostIdGuid;
+  EFI_GUID            SystemGuid;
+  EFI_GUID            RawHostId;
   EFI_STATUS          Status = EFI_SUCCESS;
   UINTN               Size;
-
-  SystemGuid = NULL;
+  UINTN               Index;
 
   NvmeOfGlobalData = NvmeOfGetVariableAndSize (
                        L"NvmeofGlobalData",
@@ -2031,57 +2030,42 @@ NvmeOfInitializeGlobalNvData (
   //
   // Set Host ID and/or Host NQN according to system UUID if not already set
   //
-  if (  (NvmeOfGlobalData->NvmeofHostId[0] == '\0')
-     || (NvmeOfGlobalData->NvmeofHostNqn[0] == '\0'))
-  {
-    SystemGuid = AllocateZeroPool (sizeof (EFI_GUID));
-    if (SystemGuid == NULL) {
-      return EFI_OUT_OF_RESOURCES;
+  if (IsZeroBuffer (NvmeOfGlobalData->NvmeofHostId, NVMEOF_HOSTID_MAX_SIZE) || (NvmeOfGlobalData->NvmeofHostNqn[0] == '\0')) {
+    ZeroMem (&SystemGuid, sizeof (SystemGuid));
+    Status = NetLibGetSystemGuid (&SystemGuid);
+
+    if (EFI_ERROR (Status) || IsZeroGuid (&SystemGuid)) {
+      DEBUG ((DEBUG_ERROR, "%a: Cannot read system UUID.\n", __FUNCTION__));
+    } else {
+      if (IsZeroBuffer (NvmeOfGlobalData->NvmeofHostId, NVMEOF_HOSTID_MAX_SIZE)) {
+        RawHostId.Data1 = SwapBytes32 (SystemGuid.Data1);
+        RawHostId.Data2 = SwapBytes16 (SystemGuid.Data2);
+        RawHostId.Data3 = SwapBytes16 (SystemGuid.Data3);
+        CopyMem (RawHostId.Data4, SystemGuid.Data4, sizeof (RawHostId.Data4));
+        CopyMem (NvmeOfGlobalData->NvmeofHostId, &RawHostId, sizeof (NvmeOfGlobalData->NvmeofHostId));
+      }
+
+      if (NvmeOfGlobalData->NvmeofHostNqn[0] == '\0') {
+        AsciiSPrint (
+          NvmeOfGlobalData->NvmeofHostNqn,
+          sizeof (NvmeOfGlobalData->NvmeofHostNqn),
+          "%a%g",
+          SPDK_NVMF_NQN_UUID_PRE,
+          &SystemGuid
+          );
+
+        //
+        // "%g" above only emits uppercase hex (EDK2's PrintLib hex table is
+        // hardcoded uppercase, no lowercase GUID format exists). 
+        // Follow RFC 4122 and use lowercase.
+        //
+        for (Index = 0; NvmeOfGlobalData->NvmeofHostNqn[Index] != '\0'; Index++) {
+          if ((NvmeOfGlobalData->NvmeofHostNqn[Index] >= 'A') && (NvmeOfGlobalData->NvmeofHostNqn[Index] <= 'F')) {
+            NvmeOfGlobalData->NvmeofHostNqn[Index] += 32;
+          }
+        }
+      }
     }
-
-    Status = NetLibGetSystemGuid (SystemGuid);
-    if (EFI_ERROR (Status)) {
-      DEBUG ((
-        DEBUG_ERROR,
-        "%a: Cannot read system UUID.\n",
-        __FUNCTION__
-        ));
-    }
-
-    if (  (NvmeOfGlobalData->NvmeofHostId[0] == '\0')
-       && !IsZeroGuid (SystemGuid))
-    {
-      // Convert EFI_GUID to little-endian and store as NvmeofHostId
-      HostIdGuid.Data1 = SwapBytes32 (SystemGuid->Data1);
-      HostIdGuid.Data2 = SwapBytes16 (SystemGuid->Data2);
-      HostIdGuid.Data3 = SwapBytes16 (SystemGuid->Data3);
-      CopyMem (
-        &(HostIdGuid.Data4),
-        SystemGuid->Data4,
-        sizeof (SystemGuid->Data4)
-        );
-
-      CopyMem (
-        NvmeOfGlobalData->NvmeofHostId,
-        &HostIdGuid,
-        sizeof (NvmeOfGlobalData->NvmeofHostId)
-        );
-    }
-
-    if (  (NvmeOfGlobalData->NvmeofHostNqn[0] == '\0')
-       && !IsZeroGuid (SystemGuid))
-    {
-      // We can use EFI_GUID directly here, the format string will handle conversion
-      AsciiSPrint (
-        NvmeOfGlobalData->NvmeofHostNqn,
-        sizeof (NvmeOfGlobalData->NvmeofHostNqn),
-        "%a%g",
-        SPDK_NVMF_NQN_UUID_PRE,
-        SystemGuid
-        );
-    }
-
-    FreePool (SystemGuid);
   }
 
   //
