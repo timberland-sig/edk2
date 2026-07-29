@@ -697,7 +697,6 @@ nvme_fabric_qpair_connect_async (
 
   assert (qpair->reserved_req != NULL);
   req = qpair->reserved_req;
-  memcpy (&req->cmd, &cmd, sizeof (cmd));
 
   if (nvme_qpair_is_admin_queue (qpair)) {
     nvmf_data->cntlid = 0xFFFF;
@@ -721,6 +720,8 @@ nvme_fabric_qpair_connect_async (
     sizeof (*nvmf_data),
     0
     );
+
+  memcpy (&req->cmd, &cmd, sizeof (cmd));
 
   rc = nvme_qpair_submit_request (qpair, req);
   if (rc < 0) {
