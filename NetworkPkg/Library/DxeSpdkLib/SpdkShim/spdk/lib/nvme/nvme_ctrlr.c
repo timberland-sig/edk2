@@ -1909,7 +1909,6 @@ nvme_ctrlr_abort_queued_aborts (
     ctrlr->outstanding_aborts++;
 
     nvme_complete_request (req->cb_fn, req->cb_arg, req->qpair, req, &cpl);
-    nvme_free_request (req);
   }
 }
 

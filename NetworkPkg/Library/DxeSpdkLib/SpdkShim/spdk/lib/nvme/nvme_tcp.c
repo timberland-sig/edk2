@@ -876,7 +876,6 @@ nvme_tcp_req_complete (
 
   TAILQ_REMOVE (&tcp_req->tqpair->outstanding_reqs, tcp_req, link);
   nvme_tcp_req_put (tqpair, tcp_req);
-  nvme_free_request (req);
   nvme_complete_request (user_cb, user_cb_arg, qpair, req, &cpl);
 }
 
