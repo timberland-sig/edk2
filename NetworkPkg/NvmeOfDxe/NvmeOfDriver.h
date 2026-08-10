@@ -76,8 +76,8 @@
 //
 // Kato timer interval
 //
-#define NVMEOF_KATO_TIMER   EFI_TIMER_PERIOD_MILLISECONDS (60000)
-#define NVMEOF_KATO_TIMOUT  EFI_TIMER_PERIOD_MILLISECONDS (70000)
+#define NVMEOF_KATO_TIMER_SECOND    60
+#define NVMEOF_KATO_TIMEOUT_SECOND  70
 
 extern void
 nvmeof_read_complete (

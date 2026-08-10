@@ -62,7 +62,7 @@ NvmeOfProbeCallback (
   CopyMem (SpdkOpts->hostnqn, NvmeOfData->NvmeofHostNqn, sizeof (NvmeOfData->NvmeofHostNqn));
 
   // Set Kato timeout
-  SpdkOpts->keep_alive_timeout_ms = NVMEOF_KATO_TIMOUT;
+  SpdkOpts->keep_alive_timeout_ms = NVMEOF_KATO_TIMEOUT_SECOND * 1000;
 
   // Fill socket context
   Private     = (NVMEOF_DRIVER_DATA *)CallbackCtx;

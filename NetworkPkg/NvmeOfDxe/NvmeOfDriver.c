@@ -734,7 +734,7 @@ NvmeOfCreatEvents (
     Status = gBS->SetTimer (
                     KatoEvent,
                     TimerPeriodic,
-                    NVMEOF_KATO_TIMER
+                    EFI_TIMER_PERIOD_MILLISECONDS (NVMEOF_KATO_TIMER_SECOND * 1000)
                     );
   }
 
