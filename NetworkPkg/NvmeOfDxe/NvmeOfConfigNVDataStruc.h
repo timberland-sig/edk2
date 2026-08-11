@@ -10,6 +10,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #define _NVMEOF_NVDATASTRUC_H_
 
 #include <Guid/NvmeOfConfigHii.h>
+#include <Shared/NvmeOfConnect.h>
 
 #define CONFIGURATION_VARSTORE_ID  0x8888
 
@@ -39,11 +40,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #define NVMEOF_CONTROLLER_ID_DEFAULT  0
 
 #define ATTEMPT_NAME_SIZE  12
-
-#define CONNECT_MIN_RETRY        0
-#define CONNECT_MAX_RETRY        16
-#define CONNECT_DEFAULT_RETRY    3
-#define CONNECT_DEFAULT_TIMEOUT  10000
 
 #define NVMEOF_DISABLED  0
 #define NVMEOF_ENABLED   1
@@ -126,6 +122,7 @@ typedef struct _NVMEOF_CONFIG_IFR_NVDATA {
 
   UINT8     IpMode;
   UINT8     ConnectRetryCount;
+  UINT16    ConnectTimeout;
 
   UINT8     HostInfoDhcp;
   UINT8     NvmeofSubsysInfoDhcp;

@@ -69,8 +69,10 @@ NvmeOfProbeCallback (
   Context     = &Private->Attempt->SocketContext;
   AttemptData = &Private->Attempt->Data;
 
-  Context->Controller = Private->Controller;
-  Context->IsIp6      = AttemptData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP6;
+  Context->Controller     = Private->Controller;
+  Context->IsIp6          = AttemptData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP6;
+  Context->ConnectTimeout = AttemptData->SubsysConfigData.NvmeofTimeout;
+  Context->RetryCount     = AttemptData->SubsysConfigData.NvmeofRetryCount;
 
   if (!Context->IsIp6) {
     CopyMem (
