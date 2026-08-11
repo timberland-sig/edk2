@@ -113,6 +113,17 @@ formset
 
     subtitle text = STRING_TOKEN(STR_NULL);
 
+    numeric varid   = NVMEOF_CONFIG_IFR_NVDATA.ConnectTimeout,
+            prompt  = STRING_TOKEN(STR_NVMEOF_CONFIG_TIMEOUT),
+            help    = STRING_TOKEN(STR_NVMEOF_CONFIG_TIMEOUT_HELP),
+            flags   = 0,
+            minimum = CONNECT_MIN_TIMEOUT,
+            maximum = CONNECT_MAX_TIMEOUT,
+            step    = 0,
+    endnumeric;
+
+    subtitle text = STRING_TOKEN(STR_NULL);
+
     grayoutif ideqval NVMEOF_CONFIG_IFR_NVDATA.IpMode == IP_MODE_AUTOCONFIG;
     checkbox varid = NVMEOF_CONFIG_IFR_NVDATA.HostInfoDhcp,
             prompt = STRING_TOKEN(STR_NVMEOF_ENABLE_DHCP),

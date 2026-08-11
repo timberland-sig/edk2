@@ -989,6 +989,7 @@ NvmeOfConvertAttemptConfigDataToIfrNvData (
   IfrNvData->NvmeofSubsysInfoDhcp     = SubsysConfigData->NvmeofSubsysInfoDhcp;
   IfrNvData->NvmeofTargetPort         = SubsysConfigData->NvmeofSubsysPortId;
   IfrNvData->ConnectRetryCount        = SubsysConfigData->NvmeofRetryCount;
+  IfrNvData->ConnectTimeout           = SubsysConfigData->NvmeofTimeout;
   IfrNvData->NvmeofSubsysControllerId = SubsysConfigData->NvmeofSubsysControllerId;
 
   AsciiStrToUnicodeStrS (
@@ -1140,6 +1141,7 @@ NvmeOfConvertIfrNvDataToAttemptConfigData (
 
   SubsysConfigData                           = &Attempt->SubsysConfigData;
   SubsysConfigData->NvmeofRetryCount         = IfrNvData->ConnectRetryCount;
+  SubsysConfigData->NvmeofTimeout            = IfrNvData->ConnectTimeout;
   SubsysConfigData->NvmeofIpMode             = IfrNvData->IpMode;
   SubsysConfigData->NvmeofSubsysControllerId = IfrNvData->NvmeofSubsysControllerId;
 
