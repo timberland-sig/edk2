@@ -1039,6 +1039,21 @@
   #
 !include NetworkPkg/NetworkComponents.dsc.inc
 !include OvmfPkg/Include/Dsc/NetworkComponents.dsc.inc
+
+!if $(NETWORK_NVMEOF_ENABLE) == TRUE
+  # SPDK uses timeout up to 30s and reads a free-running counter, so it needs a 64-bit one.
+  # OVMF uses a 24-bit ACPI PM timer, so for NVMEoF we use PcAtChipsetPkg's AcpiTimerLib, which
+  # returns 64-bit AsmReadTsc() instead and calibrates it once against the ACPI PM timer
+  # located via the PCDs below, for qemu -M q35.
+  NetworkPkg/NvmeOfDxe/NvmeOfDxe.inf {
+    <LibraryClasses>
+      TimerLib|PcAtChipsetPkg/Library/AcpiTimerLib/DxeAcpiTimerLib.inf
+    <PcdsFixedAtBuild>
+      gPcAtChipsetPkgTokenSpaceGuid.PcdAcpiIoPciBarRegisterOffset|0x0000
+      gPcAtChipsetPkgTokenSpaceGuid.PcdAcpiIoPortBaseAddress|0x0600
+      gPcAtChipsetPkgTokenSpaceGuid.PcdAcpiPm1TmrOffset|0x0008
+  }
+!endif
 !include OvmfPkg/Include/Dsc/UsbComponents.dsc.inc
 !include OvmfPkg/Include/Dsc/ShellComponents.dsc.inc
 !include OvmfPkg/Include/Dsc/MorLock.dsc.inc
