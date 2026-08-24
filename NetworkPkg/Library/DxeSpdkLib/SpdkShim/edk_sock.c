@@ -392,11 +392,12 @@ edk_sock_close (
   NetbufFree (sock->Pdu);
 
   assert (TAILQ_EMPTY (&_sock->pending_reqs));
+
+  TcpIoReset (&sock->TcpIo);
   TcpIoDestroySocket (&sock->TcpIo);
   gBS->CloseEvent (sock->TimeoutEvent);
   sock->Context->TcpIo = NULL;
   free (sock);
-  sock = NULL;
 
   return 0;
 }

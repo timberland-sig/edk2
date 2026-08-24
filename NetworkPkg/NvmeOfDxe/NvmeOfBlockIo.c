@@ -11,6 +11,105 @@
 #include "NvmeOfBlockIo.h"
 
 /**
+  Reset the controller behind a namespace.
+
+  Shared by the BlockIo and BlockIo2 Reset members, which differ only in the protocol
+  they are reached through.
+
+  @param[in]  Device                The device whose controller is reset.
+  @param[in]  ExtendedVerification  TRUE to reset the controller, FALSE to only confirm
+                                    that it is still ready.
+
+  @retval EFI_SUCCESS            The controller is ready.
+  @retval EFI_INVALID_PARAMETER  The device has no I/O queue pair.
+  @retval EFI_DEVICE_ERROR       The reset failed.
+
+**/
+STATIC
+EFI_STATUS
+NvmeOfResetController (
+  IN NVMEOF_DEVICE_PRIVATE_DATA  *Device,
+  IN BOOLEAN                     ExtendedVerification
+  )
+{
+  NVMEOF_DRIVER_DATA             *Private;
+  union spdk_nvme_csts_register  Csts;
+  EFI_STATUS                     Status;
+  EFI_TPL                        OldTpl;
+  BOOLEAN                        IsEmpty = FALSE;
+  UINT8                          Counter;
+
+  if (Device->qpair == NULL) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  Private = Device->Controller;
+  if (Private == NULL) {
+    return EFI_DEVICE_ERROR;
+  }
+
+  // Do not perform actual reset when DriverBinding->Stop was called.
+  if (Private->IsStopping) {
+    DEBUG ((DEBUG_INFO, "%a: IsStopping set, returning without reset\n", __func__));
+    return EFI_SUCCESS;
+  }
+
+  // Wait for the asynchronous queue to become empty.
+  for (Counter = 0; Counter < 10; Counter++) {
+    OldTpl  = gBS->RaiseTPL (TPL_NOTIFY);
+    IsEmpty = IsListEmpty (&Device->AsyncQueue);
+    gBS->RestoreTPL (OldTpl);
+
+    if (IsEmpty) {
+      break;
+    }
+
+    gBS->Stall (DELAY);
+  }
+
+  if (!IsEmpty) {
+    DEBUG ((DEBUG_WARN, "%a: async queue still busy, resetting anyway\n", __func__));
+  }
+
+  OldTpl = gBS->RaiseTPL (TPL_CALLBACK);
+
+  // A reset with ExtendedVerification==FALSE is required to occur as quickly as possible.
+  // Instead of performing the real reset that requires ~25 TCP traffic exchanges,
+  // check if the controller is still ready and report success.
+  if (!ExtendedVerification) {
+    Csts.raw = spdk_nvme_ctrlr_get_regs_csts (Device->NameSpace->ctrlr).raw;
+    if ((Csts.raw != SPDK_NVME_INVALID_REGISTER_VALUE) && (Csts.bits.rdy == 1)) {
+      DEBUG ((DEBUG_INFO, "%a: CSTS.RDY set, no controller reset needed\n", __func__));
+      gBS->RestoreTPL (OldTpl);
+      return EFI_SUCCESS;
+    }
+
+    DEBUG ((DEBUG_WARN, "%a: CSTS 0x%08x not ready, resetting controller\n", __func__, Csts.raw));
+  }
+
+  // Close I/O qpair before spdk_nvme_ctrlr_reset() because spdk_nvme_ctrlr_reset() closes the
+  // admin qpair only. It marks the I/O qpairs failed and then forgets them.
+  spdk_nvme_ctrlr_disconnect_io_qpair (Device->qpair);
+
+  Status = spdk_nvme_ctrlr_reset (Device->NameSpace->ctrlr);
+  Device->TcpIo = Device->Controller->TcpIo;
+  if (EFI_ERROR (Status)) {
+    Status = EFI_DEVICE_ERROR;
+  }
+
+  gBS->RestoreTPL (OldTpl);
+
+  Device->qpair = spdk_nvme_ctrlr_alloc_io_qpair (Device->NameSpace->ctrlr, NULL, 0);
+  if (Device->qpair == NULL) {
+    DEBUG ((DEBUG_ERROR, "spdk_nvme_ctrlr_alloc_io_qpair() failed\n"));
+    Status = EFI_DEVICE_ERROR;
+  }
+
+  return Status;
+}
+
+
+/**
   Reset the Block Device.
 
   @param  This                 Indicates a pointer to the calling context.
@@ -28,62 +127,86 @@ NvmeOfBlockIoReset (
   IN  BOOLEAN                ExtendedVerification
   )
 {
-  EFI_STATUS                  Status = EFI_SUCCESS;
-  EFI_TPL                     OldTpl;
-  NVMEOF_DEVICE_PRIVATE_DATA  *Device;
-  NVMEOF_DRIVER_DATA          *Private;
+  DEBUG ((DEBUG_INFO, "%a: ExtendedVerification=%d\n", __func__, ExtendedVerification));
 
-  DEBUG ((DEBUG_INFO, "NvmeOfBlockIoReset\n"));
-
-  if (This == NULL) {
+  if ((This == NULL) || IsListEmpty (&gNvmeOfControllerList)) {
     return EFI_INVALID_PARAMETER;
   }
 
-  if (IsListEmpty (&gNvmeOfControllerList)) {
+  return NvmeOfResetController (NVMEOF_DEVICE_PRIVATE_DATA_FROM_BLOCK_IO (This), ExtendedVerification);
+}
+
+/**
+  Flush the write cache of the controller behind a namespace.
+
+  Shared by the BlockIo and BlockIo2 FlushBlocks members, which are the same operation
+  and differ only in how completion is reported.
+
+  @param[in]  Device  The device to flush.
+
+  @retval EFI_SUCCESS            Outstanding data has been written to the device.
+  @retval EFI_INVALID_PARAMETER  The device has no I/O queue pair.
+  @retval EFI_DEVICE_ERROR       The device reported an error while writing back the data.
+
+**/
+STATIC
+EFI_STATUS
+NvmeOfFlushDevice (
+  IN NVMEOF_DEVICE_PRIVATE_DATA  *Device
+  )
+{
+  EFI_STATUS  Status;
+  EFI_TPL     OldTpl;
+  BOOLEAN     IsEmpty     = FALSE;
+  UINT8       IsCompleted = 0;
+  UINT8       Counter;
+  int         rc;
+
+  if (Device->qpair == NULL) {
     return EFI_INVALID_PARAMETER;
   }
 
-  //
-  // For Nvm Express subsystem, reset block device means reset controller.
-  //
+  // Flush by waiting for the asynchronous I/O queue to become empty.
+  for (Counter = 0; Counter < 10; Counter++) {
+    OldTpl  = gBS->RaiseTPL (TPL_NOTIFY);
+    IsEmpty = IsListEmpty (&Device->AsyncQueue);
+    gBS->RestoreTPL (OldTpl);
+
+    if (IsEmpty) {
+      break;
+    }
+
+    gBS->Stall (DELAY);
+  }
+
+  // Requests that never completed may still carry unwritten data, so this cannot be
+  // reported as a successful flush.
+  if (!IsEmpty) {
+    DEBUG ((DEBUG_ERROR, "%a: async queue did not drain\n", __func__));
+    return EFI_DEVICE_ERROR;
+  }
+
+  // Sending flush command is only needed if control has VWC(volatile write cache).
+  // A controller reporting none has nothing to flush, so the command would cost a round trip for nothing.
+  if (spdk_nvme_ctrlr_get_data (Device->NameSpace->ctrlr)->vwc.present == 0) {
+    return EFI_SUCCESS;
+  }
+
   OldTpl = gBS->RaiseTPL (TPL_CALLBACK);
-  Device = NVMEOF_DEVICE_PRIVATE_DATA_FROM_BLOCK_IO (This);
-  if (Device->qpair == NULL) {
-    Status = EFI_INVALID_PARAMETER;
-    goto ForcedExit;
+  rc = spdk_nvme_ns_cmd_flush (Device->NameSpace, Device->qpair, IoComplete, &IsCompleted);
+  if (rc != 0) {
+    DEBUG ((DEBUG_ERROR, "%a: flush submit failed, rc=%d\n", __func__, rc));
+    gBS->RestoreTPL (OldTpl);
+    return EFI_DEVICE_ERROR;
   }
 
-  Private = Device->Controller;
-  if (Private == NULL) {
-    Status = EFI_DEVICE_ERROR;
-    goto ForcedExit;
+  while (!IsCompleted) {
+    if (spdk_nvme_qpair_process_completions (Device->qpair, 0) < 0) {
+      gBS->RestoreTPL (OldTpl);
+      return EFI_DEVICE_ERROR;
+    }
   }
-
-  //
-  // Do not perform actual reset when DriverBinding->Stop was called.
-  //
-  if (Private->IsStopping) {
-    Status = EFI_SUCCESS;
-    goto ForcedExit;
-  }
-
-  Status        = spdk_nvme_ctrlr_reset (Device->NameSpace->ctrlr);
-  Device->TcpIo = Device->Controller->TcpIo;
-  if (EFI_ERROR (Status)) {
-    Status = EFI_DEVICE_ERROR;
-  }
-
-  gBS->RestoreTPL (OldTpl);
-
-  Device->qpair = spdk_nvme_ctrlr_alloc_io_qpair (Device->NameSpace->ctrlr, NULL, 0);
-  if (Device->qpair == NULL) {
-    DEBUG ((DEBUG_ERROR, "spdk_nvme_ctrlr_alloc_io_qpair() failed\n"));
-    Status = EFI_DEVICE_ERROR;
-  }
-
-  return Status;
-
-ForcedExit:
+  Status = (IsCompleted == IS_COMPLETED) ? EFI_SUCCESS : EFI_DEVICE_ERROR;
   gBS->RestoreTPL (OldTpl);
   return Status;
 }
@@ -104,44 +227,11 @@ NvmeOfBlockIoFlushBlocks (
   IN  EFI_BLOCK_IO_PROTOCOL  *This
   )
 {
-  NVMEOF_DEVICE_PRIVATE_DATA  *Device = NULL;
-  EFI_STATUS                  Status;
-  EFI_TPL                     OldTpl;
-  UINT8                       IsCompleted = 0;
-  int                         rc          = 0;
-
-  //
-  // Check parameters.
-  //
-  if (This == NULL) {
+  if ((This == NULL) || IsListEmpty (&gNvmeOfControllerList)) {
     return EFI_INVALID_PARAMETER;
   }
 
-  if (IsListEmpty (&gNvmeOfControllerList)) {
-    return EFI_INVALID_PARAMETER;
-  }
-
-  OldTpl = gBS->RaiseTPL (TPL_CALLBACK);
-
-  Device = NVMEOF_DEVICE_PRIVATE_DATA_FROM_BLOCK_IO (This);
-  if (Device->qpair == NULL) {
-    gBS->RestoreTPL (OldTpl);
-    return EFI_INVALID_PARAMETER;
-  }
-
-  Status = spdk_nvme_ns_cmd_flush (Device->NameSpace, Device->qpair, IoComplete, &IsCompleted);
-
-  while (!IsCompleted) {
-    rc = spdk_nvme_qpair_process_completions (Device->qpair, 0);
-    if (rc < 0) {
-      Status = EFI_DEVICE_ERROR;
-      break;
-    }
-  }
-
-  gBS->RestoreTPL (OldTpl);
-
-  return Status;
+  return NvmeOfFlushDevice (NVMEOF_DEVICE_PRIVATE_DATA_FROM_BLOCK_IO (This));
 }
 
 /**
@@ -160,82 +250,17 @@ NvmeOfBlockIoFlushBlocks (
 EFI_STATUS
 EFIAPI
 NvmeOfBlockIoResetEx (
-  IN EFI_BLOCK_IO2_PROTOCOL  *This,
-  IN BOOLEAN                 ExtendedVerification
+  IN  EFI_BLOCK_IO2_PROTOCOL  *This,
+  IN  BOOLEAN                 ExtendedVerification
   )
 {
-  EFI_STATUS                  Status;
-  NVMEOF_DRIVER_DATA          *Private;
-  NVMEOF_DEVICE_PRIVATE_DATA  *Device;
-  BOOLEAN                     IsEmpty;
-  EFI_TPL                     OldTpl;
-  UINT8                       Counter = 0;
+  DEBUG ((DEBUG_INFO, "%a: ExtendedVerification=%d\n", __func__, ExtendedVerification));
 
-  if (This == NULL) {
+  if ((This == NULL) || IsListEmpty (&gNvmeOfControllerList)) {
     return EFI_INVALID_PARAMETER;
   }
 
-  if (IsListEmpty (&gNvmeOfControllerList)) {
-    return EFI_INVALID_PARAMETER;
-  }
-
-  Device = NVMEOF_DEVICE_PRIVATE_DATA_FROM_BLOCK_IO2 (This);
-  if (Device->qpair == NULL) {
-    return EFI_INVALID_PARAMETER;
-  }
-
-  Private = Device->Controller;
-  if (Private == NULL) {
-    return EFI_INVALID_PARAMETER;
-  }
-
-  //
-  // Do not perform actual reset when DriverBinding->Stop was called.
-  //
-  if (Private->IsStopping) {
-    return EFI_SUCCESS;
-  }
-
-  //
-  // Wait for the asynchronous queue to become empty.
-  //
-  while (TRUE) {
-    OldTpl = gBS->RaiseTPL (TPL_NOTIFY);
-    IsEmpty = IsListEmpty (&Private->UnsubmittedSubtasks);
-
-    gBS->RestoreTPL (OldTpl);
-
-    Counter++;
-    if (Counter == 10) {
-      DEBUG ((DEBUG_INFO, "Exiting since delay timeout\n"));
-      break;
-    }
-
-    if (IsEmpty) {
-      break;
-    }
-
-    gBS->Stall (DELAY);
-  }
-
-  OldTpl = gBS->RaiseTPL (TPL_CALLBACK);
-
-  Status        = spdk_nvme_ctrlr_reset (Device->NameSpace->ctrlr);
-  Device->TcpIo = Device->Controller->TcpIo;
-
-  if (EFI_ERROR (Status)) {
-    Status = EFI_DEVICE_ERROR;
-  }
-
-  gBS->RestoreTPL (OldTpl);
-
-  Device->qpair = spdk_nvme_ctrlr_alloc_io_qpair (Device->NameSpace->ctrlr, NULL, 0);
-  if (Device->qpair == NULL) {
-    DEBUG ((DEBUG_ERROR, "spdk_nvme_ctrlr_alloc_io_qpair() failed\n"));
-    Status = EFI_DEVICE_ERROR;
-  }
-
-  return Status;
+  return NvmeOfResetController (NVMEOF_DEVICE_PRIVATE_DATA_FROM_BLOCK_IO2 (This), ExtendedVerification);
 }
 
 /**
@@ -269,45 +294,18 @@ NvmeOfBlockIoFlushBlocksEx (
   IN OUT EFI_BLOCK_IO2_TOKEN     *Token
   )
 {
-  NVMEOF_DEVICE_PRIVATE_DATA  *Device = NULL;
-  BOOLEAN                     IsEmpty;
-  EFI_TPL                     OldTpl;
-  UINT8                       Counter = 0;
+  EFI_STATUS  Status;
 
-  // Check parameters.
-  if (This == NULL) {
+  if ((This == NULL) || IsListEmpty (&gNvmeOfControllerList)) {
     return EFI_INVALID_PARAMETER;
   }
 
-  if (IsListEmpty (&gNvmeOfControllerList)) {
-    return EFI_INVALID_PARAMETER;
+  Status = NvmeOfFlushDevice (NVMEOF_DEVICE_PRIVATE_DATA_FROM_BLOCK_IO2 (This));
+  if (EFI_ERROR (Status)) {
+    // UEFI requires the caller event to stay unsignalled when the flush itself fails.
+    return Status;
   }
 
-  Device = NVMEOF_DEVICE_PRIVATE_DATA_FROM_BLOCK_IO2 (This);
-  if (Device->qpair == NULL) {
-    return EFI_INVALID_PARAMETER;
-  }
-
-  // Wait for the asynchronous I/O queue to become empty.
-  while (TRUE) {
-    OldTpl  = gBS->RaiseTPL (TPL_NOTIFY);
-    IsEmpty = IsListEmpty (&Device->AsyncQueue);
-    gBS->RestoreTPL (OldTpl);
-
-    Counter++;
-    if (Counter == 10) {
-      DEBUG ((DEBUG_INFO, "Exiting since delay timeout\n"));
-      break;
-    }
-
-    if (IsEmpty) {
-      break;
-    }
-
-    gBS->Stall (DELAY);
-  }
-
-  // Signal caller event
   if ((Token != NULL) && (Token->Event != NULL)) {
     Token->TransactionStatus = EFI_SUCCESS;
     gBS->SignalEvent (Token->Event);
@@ -823,6 +821,7 @@ NvmeOfBlockIoReadBlocks (
 
   Device = NVMEOF_DEVICE_PRIVATE_DATA_FROM_BLOCK_IO (This);
 
+
   if (Device->qpair == NULL) {
     gBS->RestoreTPL (OldTpl);
     return EFI_INVALID_PARAMETER;
@@ -970,35 +969,37 @@ WriteSectors (
   IN UINT32                      Blocks
   )
 {
-  UINT8       IsCompleted = 0;
-  EFI_STATUS  Status      = EFI_SUCCESS;
-  int         rc          = 0;
+  UINT8  IsCompleted = 0;
+  int    rc;
 
-  // redircting to SPDK lib write function
-  Status = spdk_nvme_ns_cmd_write (
-             Device->NameSpace,
-             Device->qpair,
-             (void *)Buffer,
-             Lba,
-             Blocks,
-             IoComplete,
-             &IsCompleted,
-             0
-             );
+  rc = spdk_nvme_ns_cmd_write (
+         Device->NameSpace,
+         Device->qpair,
+         (void *)Buffer,
+         Lba,
+         Blocks,
+         IoComplete,
+         &IsCompleted,
+         0
+         );
+  if (rc != 0) {
+    DEBUG ((DEBUG_ERROR, "%a: submit failed, rc=%d\n", __func__, rc));
+    return EFI_DEVICE_ERROR;
+  }
+
   while (!IsCompleted) {
-    rc = spdk_nvme_qpair_process_completions (Device->qpair, 0);
-    if (rc < 0) {
-      IsCompleted = ERROR_IN_COMPLETION;
-      break;
+    if (spdk_nvme_qpair_process_completions (Device->qpair, 0) < 0) {
+      DEBUG ((DEBUG_ERROR, "%a: completion polling failed\n", __func__));
+      return EFI_DEVICE_ERROR;
     }
   }
 
-  if (IsCompleted == ERROR_IN_COMPLETION) {
-    DEBUG ((DEBUG_ERROR, "WriteSectors: Error In Process Write Data\n"));
-    Status = EFI_DEVICE_ERROR;
+  if (IsCompleted != IS_COMPLETED) {
+    DEBUG ((DEBUG_ERROR, "%a: write failed\n", __func__));
+    return EFI_DEVICE_ERROR;
   }
 
-  return Status;
+  return EFI_SUCCESS;
 }
 
 /**
