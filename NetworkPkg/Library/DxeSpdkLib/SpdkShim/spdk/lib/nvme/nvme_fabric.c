@@ -80,16 +80,10 @@ nvme_fabric_prop_set_cmd_sync (
     return rc;
   }
 
-  if (nvme_wait_for_completion_robust_lock (ctrlr->adminq, status, &ctrlr->ctrlr_lock)) {
-    if (!status->timed_out) {
-      free (status);
-    }
-
+  if (nvme_wait_for_adminq_completion (ctrlr, status, true)) {
     SPDK_ERRLOG ("Property Set failed\n");
     return -1;
   }
-
-  free (status);
 
   return 0;
 }
@@ -197,7 +191,7 @@ nvme_fabric_prop_get_cmd_sync (
     return rc;
   }
 
-  if (nvme_wait_for_completion_robust_lock (ctrlr->adminq, status, &ctrlr->ctrlr_lock)) {
+  if (nvme_wait_for_adminq_completion (ctrlr, status, false)) {
     if (!status->timed_out) {
       free (status);
     }
@@ -508,15 +502,9 @@ nvme_fabric_get_discovery_log_page (
     return -1;
   }
 
-  if (nvme_wait_for_completion (ctrlr->adminq, status)) {
-    if (!status->timed_out) {
-      free (status);
-    }
-
+  if (nvme_wait_for_adminq_completion (ctrlr, status, true)) {
     return -1;
   }
-
-  free (status);
 
   return 0;
 }
@@ -581,17 +569,11 @@ nvme_fabric_ctrlr_scan (
     return rc;
   }
 
-  if (nvme_wait_for_completion (discovery_ctrlr->adminq, status)) {
+  if (nvme_wait_for_adminq_completion (discovery_ctrlr, status, true)) {
     SPDK_ERRLOG ("nvme_identify_controller failed!\n");
     nvme_ctrlr_destruct (discovery_ctrlr);
-    if (!status->timed_out) {
-      free (status);
-    }
-
     return -ENXIO;
   }
-
-  free (status);
 
   /* Direct attach through spdk_nvme_connect() API */
   if (direct_connect == true) {
@@ -754,7 +736,7 @@ nvme_fabric_qpair_connect_async (
                           spdk_get_ticks_hz () / SPDK_SEC_TO_USEC;
   }
 
-  qpair->poll_status = status;
+  qpair->fabric_poll_status = status;
   return 0;
 }
 
@@ -769,9 +751,9 @@ nvme_fabric_qpair_connect_poll (
   int                                  rc = 0;
 
   ctrlr  = qpair->ctrlr;
-  status = qpair->poll_status;
+  status = qpair->fabric_poll_status;
 
-  if (nvme_wait_for_completion_robust_lock_timeout_poll (qpair, status, NULL) == -EAGAIN) {
+  if (nvme_wait_for_completion_poll (qpair, status) == -EAGAIN) {
     return -EAGAIN;
   }
 
@@ -807,7 +789,7 @@ nvme_fabric_qpair_connect_poll (
   }
 
 finish:
-  qpair->poll_status = NULL;
+  qpair->fabric_poll_status = NULL;
   if (!status->timed_out) {
     spdk_free (status->dma_data);
     free (status);

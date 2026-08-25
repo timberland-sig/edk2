@@ -191,6 +191,12 @@ strerror_r (
   int   buflen
   );
 
+char
+*
+strerror (
+  int  errnum
+  );
+
 const char
 *
 spdk_strerror (

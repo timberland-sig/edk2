@@ -1,0 +1,177 @@
+From 5b49eeb04150bb12c135f39e9ee8c7a75493d164 Mon Sep 17 00:00:00 2001
+From: Trevor cockrell <trevor_cockrell@dell.com>
+Date: Fri, 5 Apr 2024 17:04:49 -0500
+Subject: [PATCH] NetworkPkg/NvmeOfDxe: HostID conversion from EFI_GUID
+Content-type: text/plain
+
+Convert the various HostID EFI_GUIDS to little-endian to align the
+driver and NBFT with NVMe base spec.
+
+Signed-off-by: Trevor cockrell <trevor_cockrell@dell.com>
+---
+ NetworkPkg/Application/NvmeOfCli/NvmeOfCli.c | 10 ++++++-
+ NetworkPkg/NvmeOfDxe/NvmeOfConfig.c          | 28 ++++++++++++++++++--
+ NetworkPkg/NvmeOfDxe/NvmeOfMisc.c            | 16 +++++++++--
+ 3 files changed, 49 insertions(+), 5 deletions(-)
+
+diff --git a/NetworkPkg/Application/NvmeOfCli/NvmeOfCli.c b/NetworkPkg/Application/NvmeOfCli/NvmeOfCli.c
+index 7ab9d53628..f5187b65e9 100644
+--- a/NetworkPkg/Application/NvmeOfCli/NvmeOfCli.c
++++ b/NetworkPkg/Application/NvmeOfCli/NvmeOfCli.c
+@@ -1,7 +1,7 @@
+ /** @file
+   NvmeOf CLI is used to test NVMeOF Driver
+ 
+-Copyright (c) 2020 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.
++Copyright (c) 2020 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.
+ Copyright (c) 2022, Intel Corporation. All rights reserved.
+   SPDX-License-Identifier: BSD-2-Clause-Patent
+ **/
+@@ -847,6 +847,10 @@ NvmeOfCliSetAttempt (
+       } else if (!AsciiStriCmp (Tag, "HostId")) {
+         AsciiStrToUnicodeStrS (Line, HostIdStr, NVMEOF_NID_LEN);
+         if (StrToGuid (HostIdStr, &HostRawGuid) == RETURN_SUCCESS) {
++          // Convert EFI_GUID to little-endian
++          HostRawGuid.Data1 = SwapBytes32 (HostRawGuid.Data1);
++          HostRawGuid.Data2 = SwapBytes16 (HostRawGuid.Data2);
++          HostRawGuid.Data3 = SwapBytes16 (HostRawGuid.Data3);
+           CopyMem (NvmeofData[0].NvmeofHostId, &HostRawGuid, sizeof (HostRawGuid));
+         } else {
+           Print (L"Invalid HostGUID format\n");
+@@ -881,6 +885,10 @@ NvmeOfCliSetAttempt (
+       } else if (!AsciiStriCmp (Tag, "HostIdOverride")) {
+         AsciiStrToUnicodeStrS (Line, HostIdStr, NVMEOF_NID_LEN);
+         if (StrToGuid (HostIdStr, &HostRawGuid) == RETURN_SUCCESS) {
++          // Convert EFI_GUID to little-endian
++          HostRawGuid.Data1 = SwapBytes32 (HostRawGuid.Data1);
++          HostRawGuid.Data2 = SwapBytes16 (HostRawGuid.Data2);
++          HostRawGuid.Data3 = SwapBytes16 (HostRawGuid.Data3);
+           CopyMem (Nvmeof_Attemptconfig[i].SubsysConfigData.NvmeofHostIdOverride, &HostRawGuid, sizeof (HostRawGuid));
+         }
+       } else if (!AsciiStriCmp (Tag, "HostOverrideEnable")) {
+diff --git a/NetworkPkg/NvmeOfDxe/NvmeOfConfig.c b/NetworkPkg/NvmeOfDxe/NvmeOfConfig.c
+index 23c42abdd7..3578e424d6 100644
+--- a/NetworkPkg/NvmeOfDxe/NvmeOfConfig.c
++++ b/NetworkPkg/NvmeOfDxe/NvmeOfConfig.c
+@@ -1541,6 +1541,7 @@ NvmeOfFormExtractConfig (
+   EFI_STRING                 ConfigRequest;
+   BOOLEAN                    AllocatedRequest;
+   UINTN                      Size;
++  EFI_GUID                   HostIdAsGuid;
+ 
+   if ((This == NULL) || (Progress == NULL) || (Results == NULL)) {
+     return EFI_INVALID_PARAMETER;
+@@ -1582,11 +1583,21 @@ NvmeOfFormExtractConfig (
+       );
+ 
+     if (!IsZeroGuid ((EFI_GUID *)NvmeOfGlobalData->NvmeofHostId)) {
++      // Use NvmeofHostId in EFI_GUID format for format string compatibility
++      CopyMem (
++        &HostIdAsGuid,
++        (EFI_GUID *)NvmeOfGlobalData->NvmeofHostId,
++        sizeof (HostIdAsGuid)
++        );
++      HostIdAsGuid.Data1 = SwapBytes32 (HostIdAsGuid.Data1);
++      HostIdAsGuid.Data2 = SwapBytes16 (HostIdAsGuid.Data2);
++      HostIdAsGuid.Data3 = SwapBytes16 (HostIdAsGuid.Data3);
++
+       UnicodeSPrint (
+         IfrNvData->NvmeofHostId,
+         sizeof (IfrNvData->NvmeofHostId),
+         L"%g",
+-        NvmeOfGlobalData->NvmeofHostId
++        &HostIdAsGuid
+         );
+     }
+ 
+@@ -1793,6 +1804,7 @@ NvmeOfFormCallback (
+   CHAR16                     MacString[NVMEOF_MAX_MAC_STRING_LEN];
+   NVMEOF_CONFIG_NIC_INFO     *NicInfo;
+   LIST_ENTRY                 *Entry;
++  EFI_GUID                   HostIdGuid;
+ 
+   if ((Action == EFI_BROWSER_ACTION_FORM_OPEN) && mCallbackInfo->InitialFormLoad) {
+     //
+@@ -1896,9 +1908,10 @@ NvmeOfFormCallback (
+             NVMEOF_NAME_MAX_SIZE
+             );
+         } else if (QuestionId == KEY_HOST_ID) {
++          // Check HostId format for valid GUID
+           Status = StrToGuid (
+                      IfrNvData->NvmeofHostId,
+-                     (EFI_GUID *)NvmeOfGlobalData->NvmeofHostId
++                     &HostIdGuid
+                      );
+           if (EFI_ERROR (Status)) {
+             CreatePopUp (
+@@ -1910,6 +1923,17 @@ NvmeOfFormCallback (
+             FreePool (NvmeOfGlobalData);
+             break;
+           }
++
++          // Convert EFI_GUID to little-endian and store as NvmeofHostId
++          HostIdGuid.Data1 = SwapBytes32 (HostIdGuid.Data1);
++          HostIdGuid.Data2 = SwapBytes16 (HostIdGuid.Data2);
++          HostIdGuid.Data3 = SwapBytes16 (HostIdGuid.Data3);
++
++          CopyMem (
++            NvmeOfGlobalData->NvmeofHostId,
++            &HostIdGuid,
++            sizeof (NvmeOfGlobalData->NvmeofHostId)
++            );
+         }
+ 
+         Status = gRT->SetVariable (
+diff --git a/NetworkPkg/NvmeOfDxe/NvmeOfMisc.c b/NetworkPkg/NvmeOfDxe/NvmeOfMisc.c
+index 4c99f61b74..1439115252 100644
+--- a/NetworkPkg/NvmeOfDxe/NvmeOfMisc.c
++++ b/NetworkPkg/NvmeOfDxe/NvmeOfMisc.c
+@@ -1,7 +1,7 @@
+ /** @file
+   Miscellaneous routines for NVMeOF driver.
+ 
+-  Copyright (c) 2021 - 2023, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
++  Copyright (c) 2021 - 2024, Dell Inc. or its subsidiaries. All Rights Reserved.<BR>
+   Copyright (c) 2022 - 2023, Intel Corporation. All rights reserved.<BR>
+   SPDX-License-Identifier: BSD-2-Clause-Patent
+ 
+@@ -1999,6 +1999,7 @@ NvmeOfInitializeGlobalNvData (
+ {
+   NVMEOF_GLOBAL_DATA  *NvmeOfGlobalData;
+   EFI_GUID            *SystemGuid;
++  EFI_GUID            HostIdGuid;
+   EFI_STATUS          Status = EFI_SUCCESS;
+   UINTN               Size;
+ 
+@@ -2050,9 +2051,19 @@ NvmeOfInitializeGlobalNvData (
+     if (  (NvmeOfGlobalData->NvmeofHostId[0] == '\0')
+        && !IsZeroGuid (SystemGuid))
+     {
++      // Convert EFI_GUID to little-endian and store as NvmeofHostId
++      HostIdGuid.Data1 = SwapBytes32 (SystemGuid->Data1);
++      HostIdGuid.Data2 = SwapBytes16 (SystemGuid->Data2);
++      HostIdGuid.Data3 = SwapBytes16 (SystemGuid->Data3);
++      CopyMem (
++        &(HostIdGuid.Data4),
++        SystemGuid->Data4,
++        sizeof (SystemGuid->Data4)
++        );
++
+       CopyMem (
+         NvmeOfGlobalData->NvmeofHostId,
+-        SystemGuid,
++        &HostIdGuid,
+         sizeof (NvmeOfGlobalData->NvmeofHostId)
+         );
+     }
+@@ -2060,6 +2071,7 @@ NvmeOfInitializeGlobalNvData (
+     if (  (NvmeOfGlobalData->NvmeofHostNqn[0] == '\0')
+        && !IsZeroGuid (SystemGuid))
+     {
++      // We can use EFI_GUID directly here, the format string will handle conversion
+       AsciiSPrint (
+         NvmeOfGlobalData->NvmeofHostNqn,
+         sizeof (NvmeOfGlobalData->NvmeofHostNqn),
+-- 
+2.55.0
+

@@ -508,55 +508,17 @@ _tcp_write_pdu (
 }
 
 static void
-data_crc32_accel_done (
-  void  *cb_arg,
-  int   status
-  )
-{
-  struct nvme_tcp_pdu  *pdu = cb_arg;
-
-  if (spdk_unlikely (status)) {
-    SPDK_ERRLOG ("Failed to compute the data digest for pdu =%p\n", pdu);
-    _pdu_write_done (pdu, status);
-    return;
-  }
-
-  pdu->data_digest_crc32 ^= SPDK_CRC32C_XOR;
-  MAKE_DIGEST_WORD (pdu->data_digest, pdu->data_digest_crc32);
-
-  _tcp_write_pdu (pdu);
-}
-
-static void
 pdu_data_crc32_compute (
   struct nvme_tcp_pdu  *pdu
   )
 {
-  struct nvme_tcp_qpair       *tqpair = pdu->qpair;
-  uint32_t                    crc32c;
-  struct nvme_tcp_poll_group  *tgroup = nvme_tcp_poll_group (tqpair->qpair.poll_group);
+  struct nvme_tcp_qpair  *tqpair = pdu->qpair;
+  uint32_t               crc32c;
 
   /* Data Digest */
   if ((pdu->data_len > 0) && g_nvme_tcp_ddgst[pdu->hdr.common.pdu_type] &&
       tqpair->flags.host_ddgst_enable)
   {
-    /* Only support this limited case for the first step */
-    if ((nvme_qpair_get_state (&tqpair->qpair) >= NVME_QPAIR_CONNECTED) &&
-        ((tgroup != NULL) && tgroup->group.group->accel_fn_table.submit_accel_crc32c) &&
-        spdk_likely (!pdu->dif_ctx && (pdu->data_len % SPDK_NVME_TCP_DIGEST_ALIGNMENT == 0)))
-    {
-      tgroup->group.group->accel_fn_table.submit_accel_crc32c (
-                                            tgroup->group.group->ctx,
-                                            &pdu->data_digest_crc32,
-                                            pdu->data_iov,
-                                            pdu->data_iovcnt,
-                                            0,
-                                            data_crc32_accel_done,
-                                            pdu
-                                            );
-      return;
-    }
-
     crc32c = nvme_tcp_pdu_calc_data_digest (pdu);
     crc32c = crc32c ^ SPDK_CRC32C_XOR;
     MAKE_DIGEST_WORD (pdu->data_digest, crc32c);
@@ -1246,58 +1208,15 @@ _nvme_tcp_pdu_payload_handle (
 }
 
 static void
-tcp_data_recv_crc32_done (
-  void  *cb_arg,
-  int   status
-  )
-{
-  struct nvme_tcp_req         *tcp_req = cb_arg;
-  struct nvme_tcp_pdu         *pdu;
-  struct nvme_tcp_qpair       *tqpair;
-  int                         rc;
-  struct nvme_tcp_poll_group  *pgroup;
-  int                         dummy_reaped = 0;
-
-  pdu = tcp_req->pdu;
-  assert (pdu != NULL);
-
-  tqpair = tcp_req->tqpair;
-  assert (tqpair != NULL);
-
-  if (tqpair->qpair.poll_group && !tqpair->needs_poll) {
-    pgroup = nvme_tcp_poll_group (tqpair->qpair.poll_group);
-    TAILQ_INSERT_TAIL (&pgroup->needs_poll, tqpair, link);
-    tqpair->needs_poll = true;
-  }
-
-  if (spdk_unlikely (status)) {
-    SPDK_ERRLOG ("Failed to compute the data digest for pdu =%p\n", pdu);
-    tcp_req->rsp.status.sc = SPDK_NVME_SC_COMMAND_TRANSIENT_TRANSPORT_ERROR;
-    goto end;
-  }
-
-  pdu->data_digest_crc32 ^= SPDK_CRC32C_XOR;
-  rc                      = MATCH_DIGEST_WORD (pdu->data_digest, pdu->data_digest_crc32);
-  if (rc == 0) {
-    SPDK_ERRLOG ("data digest error on tqpair=(%p) with pdu=%p\n", tqpair, pdu);
-    tcp_req->rsp.status.sc = SPDK_NVME_SC_COMMAND_TRANSIENT_TRANSPORT_ERROR;
-  }
-
-end:
-  nvme_tcp_c2h_data_payload_handle (tqpair, tcp_req->pdu, (uint32_t *)&dummy_reaped);
-}
-
-static void
 nvme_tcp_pdu_payload_handle (
   struct nvme_tcp_qpair  *tqpair,
   uint32_t               *reaped
   )
 {
-  int                         rc   = 0;
-  struct nvme_tcp_pdu         *pdu = tqpair->recv_pdu;
-  uint32_t                    crc32c;
-  struct nvme_tcp_poll_group  *tgroup;
-  struct nvme_tcp_req         *tcp_req = pdu->req;
+  int                  rc   = 0;
+  struct nvme_tcp_pdu  *pdu = tqpair->recv_pdu;
+  uint32_t             crc32c;
+  struct nvme_tcp_req  *tcp_req = pdu->req;
 
   assert (tqpair->recv_state == NVME_TCP_PDU_RECV_STATE_AWAIT_PDU_PAYLOAD);
   SPDK_DEBUGLOG (nvme, "enter\n");
@@ -1311,46 +1230,6 @@ nvme_tcp_pdu_payload_handle (
   if (pdu->ddgst_enable) {
     /* But if the data digest is enabled, tcp_req cannot be NULL */
     assert (tcp_req != NULL);
-    tgroup = nvme_tcp_poll_group (tqpair->qpair.poll_group);
-    /* Only support this limitated case that the request has only one c2h pdu */
-    if ((nvme_qpair_get_state (&tqpair->qpair) >= NVME_QPAIR_CONNECTED) &&
-        ((tgroup != NULL) && tgroup->group.group->accel_fn_table.submit_accel_crc32c) &&
-        spdk_likely (
-          !pdu->dif_ctx && (pdu->data_len % SPDK_NVME_TCP_DIGEST_ALIGNMENT == 0)
-                    && (tcp_req->req->payload_size == pdu->data_len)
-          ))
-    {
-      tcp_req->pdu->hdr = pdu->hdr;
-      tcp_req->pdu->req = tcp_req;
-      if (sizeof (pdu->data_digest) <= sizeof (tcp_req->pdu->data_digest)) {
-        memcpy (tcp_req->pdu->data_digest, pdu->data_digest, sizeof (pdu->data_digest));
-      } else {
-        SPDK_ERRLOG ("memory overflow error on tqpair=(%p) with pdu=%p\n", tqpair, pdu);
-        memcpy (tcp_req->pdu->data_digest, pdu->data_digest, sizeof (tcp_req->pdu->data_digest));
-      }
-
-      if ((sizeof (pdu->data_iov[0]) * pdu->data_iovcnt) <= sizeof (tcp_req->pdu->data_iov)) {
-        memcpy (tcp_req->pdu->data_iov, pdu->data_iov, sizeof (pdu->data_iov[0]) * pdu->data_iovcnt);
-      } else {
-        SPDK_ERRLOG ("memory overflow error on tqpair=(%p) with pdu=%p\n", tqpair, pdu);
-        memcpy (tcp_req->pdu->data_iov, pdu->data_iov, sizeof (tcp_req->pdu->data_iov));
-      }
-
-      tcp_req->pdu->data_iovcnt = pdu->data_iovcnt;
-      tcp_req->pdu->data_len    = pdu->data_len;
-
-      nvme_tcp_qpair_set_recv_state (tqpair, NVME_TCP_PDU_RECV_STATE_AWAIT_PDU_READY);
-      tgroup->group.group->accel_fn_table.submit_accel_crc32c (
-                                            tgroup->group.group->ctx,
-                                            &tcp_req->pdu->data_digest_crc32,
-                                            tcp_req->pdu->data_iov,
-                                            tcp_req->pdu->data_iovcnt,
-                                            0,
-                                            tcp_data_recv_crc32_done,
-                                            tcp_req
-                                            );
-      return;
-    }
 
     crc32c = nvme_tcp_pdu_calc_data_digest (pdu);
     crc32c = crc32c ^ SPDK_CRC32C_XOR;
@@ -2217,16 +2096,14 @@ edk_nvme_tcp_qpair_connect_sock (
     }
   }
 
-  sock_impl_name = ctrlr->opts.psk[0] ? "ssl" : NULL;
+  sock_impl_name = ctrlr->opts.tls_psk ? "ssl" : NULL;
   SPDK_DEBUGLOG (nvme, "sock_impl_name is %s\n", sock_impl_name);
 
-  spdk_sock_impl_get_opts (sock_impl_name, &impl_opts, &impl_opts_size);
-  impl_opts.enable_ktls = false;
-  impl_opts.tls_version = SPDK_TLS_VERSION_1_3;
-  /* TODO: Change current PSK HEX string format to TLS PSK Interchange Format */
-  impl_opts.psk_key = ctrlr->opts.psk;
-  /* TODO: generate identity from hostnqn instead */
-  impl_opts.psk_identity = "psk.spdk.io";
+  if (sock_impl_name) {
+    spdk_sock_impl_get_opts (sock_impl_name, &impl_opts, &impl_opts_size);
+    impl_opts.enable_ktls = false;
+    impl_opts.tls_version = SPDK_TLS_VERSION_1_3;
+  }
 
   opts.opts_size = sizeof (opts);
   spdk_sock_get_default_opts (&opts);

@@ -880,7 +880,7 @@ PrintIdentifyControllerData (
 
   Print (
     L"128-bit Host Identifier:               %a\n",
-    ReturnCdata->ctratt.host_id_exhid_supported ? "Supported" : "Not Supported"
+    ReturnCdata->ctratt.bits.host_id_exhid_supported ? "Supported" : "Not Supported"
     );
   Print (L"\n");
 

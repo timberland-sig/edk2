@@ -153,7 +153,7 @@ nvme_fabric_get_discovery_log_page (
     return -1;
   }
 
-  if (nvme_wait_for_completion (ctrlr->adminq, status)) {
+  if (nvme_wait_for_completion_poll (ctrlr->adminq, status)) {
     if (!status->timed_out) {
       free (status);
     }
@@ -286,7 +286,7 @@ edk_fabric_ctrlr_scan (
     return rc;
   }
 
-  if (nvme_wait_for_completion (discovery_ctrlr->adminq, status)) {
+  if (nvme_wait_for_completion_poll (discovery_ctrlr->adminq, status)) {
     SPDK_ERRLOG ("nvme_identify_controller failed!\n");
     nvme_ctrlr_destruct (discovery_ctrlr);
     if (!status->timed_out) {

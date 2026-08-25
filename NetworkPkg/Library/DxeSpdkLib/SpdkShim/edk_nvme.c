@@ -26,7 +26,7 @@ edk_nvme_ctrlr_probe (
   edk_opts.base     = &opts;
   edk_opts.sock_ctx = NULL;
   if (!probe_ctx->probe_cb || probe_ctx->probe_cb (probe_ctx->cb_ctx, trid, (struct spdk_nvme_ctrlr_opts *)&edk_opts)) {
-    ctrlr = nvme_get_ctrlr_by_trid_unsafe (trid);
+    ctrlr = nvme_get_ctrlr_by_trid_unsafe (trid, opts.hostnqn);
     if (ctrlr) {
       /* This ctrlr already exists. */
 

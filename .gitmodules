@@ -41,4 +41,4 @@
 [submodule "NetworkPkg/Library/DxeSpdkLib/spdk"]
 	path = NetworkPkg/Library/DxeSpdkLib/spdk
         url = https://github.com/spdk/spdk.git
-        branch = v23.01.x 
+        branch = v26.01.x
