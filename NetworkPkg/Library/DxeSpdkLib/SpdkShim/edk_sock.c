@@ -136,6 +136,7 @@ edk_sock_connect (
   UINT8                                                  *Packet        = NULL;
   UINT16                                                 ConnectTimeout;
   UINT8                                                  RetryCount;
+  UINT32                                                 Elapsed;
   struct edk_spdk_sock_opts                              *edk_sock_opts = __edk_sock_opts (opts);
 
   opts = __spdk_sock_opts (edk_sock_opts);
@@ -242,8 +243,21 @@ edk_sock_connect (
       goto ErrorExit3;
     }
 
-    Status = TcpIoConnect (TcpIo, sock->TimeoutEvent);
+    {
+      UINT64  Start, End, Hz;
+      Start = GetPerformanceCounter ();
+      Status = TcpIoConnect (TcpIo, sock->TimeoutEvent);
+      End   = GetPerformanceCounter ();
+      Hz    = GetPerformanceCounterProperties (NULL, NULL);
+      Elapsed = (UINT32)(Hz ? DivU64x64Remainder ((End - Start) * 1000, Hz, NULL) : 0);
+    }
+
+    //
+    // Cancel the timer and consume any signal it already raised, otherwise the next
+    // TcpIoConnect() sees an armed timeout event and gives up without trying.
+    //
     gBS->SetTimer (sock->TimeoutEvent, TimerCancel, 0);
+    gBS->CheckEvent (sock->TimeoutEvent);
 
     if (!EFI_ERROR (Status)) {
       break;
@@ -251,6 +265,18 @@ edk_sock_connect (
 
     SPDK_ERRLOG ("TcpIoConnect error: %r, attempt %d of %d\n", Status, RetryCount + 1, SockContext->RetryCount + 1);
     TcpIoDestroySocket (TcpIo);
+
+    //
+    // ConnectTimeout is the budget for one attempt. TcpIoConnect only honors it when the
+    // connection hangs: if the stack fails fast, for example because the link is not
+    // forwarding yet and ARP cannot complete, it returns EFI_ABORTED in a fraction of that
+    // time and every retry is spent at once. Wait out the remainder so the configured
+    // timeout and retry count together describe a real window.
+    //
+    if (Elapsed < ConnectTimeout) {
+      gBS->Stall ((ConnectTimeout - Elapsed) * 1000);
+    }
+
     RetryCount++;
   } while (RetryCount <= SockContext->RetryCount);
 
