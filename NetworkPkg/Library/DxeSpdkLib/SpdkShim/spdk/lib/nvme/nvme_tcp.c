@@ -876,7 +876,6 @@ nvme_tcp_req_complete (
 
   TAILQ_REMOVE (&tcp_req->tqpair->outstanding_reqs, tcp_req, link);
   nvme_tcp_req_put (tqpair, tcp_req);
-  nvme_free_request (req);
   nvme_complete_request (user_cb, user_cb_arg, qpair, req, &cpl);
 }
 
@@ -2463,6 +2462,10 @@ const struct spdk_nvme_transport_ops  g_edk_nvme_tcp_ops = {
   .ctrlr_destruct  = nvme_tcp_ctrlr_destruct,
   .ctrlr_enable    = nvme_tcp_ctrlr_enable,
 
+  .ctrlr_set_reg_4       = nvme_fabric_ctrlr_set_reg_4,
+  .ctrlr_set_reg_8       = nvme_fabric_ctrlr_set_reg_8,
+  .ctrlr_get_reg_4       = nvme_fabric_ctrlr_get_reg_4,
+  .ctrlr_get_reg_8       = nvme_fabric_ctrlr_get_reg_8,
   .ctrlr_set_reg_4_async = nvme_fabric_ctrlr_set_reg_4_async,
   .ctrlr_set_reg_8_async = nvme_fabric_ctrlr_set_reg_8_async,
   .ctrlr_get_reg_4_async = nvme_fabric_ctrlr_get_reg_4_async,

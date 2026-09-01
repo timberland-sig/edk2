@@ -17,11 +17,11 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include "spdk_internal/sock.h"
 #include <Library/NetLib.h>
 #include <Library/TcpIoLib.h>
+#include <Shared/NvmeOfConnect.h>
 
 #define MAX_TMPBUF      1024
 #define PORTNUMLEN      32
 #define IOV_BATCH_SIZE  64
-#define TIMEOUT         1000
 
 struct spdk_edk_sock_ctx {
   // Sourced externally
@@ -30,6 +30,8 @@ struct spdk_edk_sock_ctx {
   EFI_IP_ADDRESS    StationIp;      // Client-side IP address
   EFI_IP_ADDRESS    SubnetMask;     // Client-side subnet mask
   EFI_IP_ADDRESS    GatewayIp;      // Client's gateway IP address
+  UINT16            ConnectTimeout; // Per-attempt connect timeout in ms, 0 for the default
+  UINT8             RetryCount;     // Connect retries after the first attempt
 
   // Provided by socket
   TCP_IO            *TcpIo;         // Socket's TCP_IO

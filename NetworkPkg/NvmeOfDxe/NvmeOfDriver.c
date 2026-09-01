@@ -734,7 +734,7 @@ NvmeOfCreatEvents (
     Status = gBS->SetTimer (
                     KatoEvent,
                     TimerPeriodic,
-                    NVMEOF_KATO_TIMER
+                    EFI_TIMER_PERIOD_MILLISECONDS (NVMEOF_KATO_TIMER_SECOND * 1000)
                     );
   }
 
@@ -1421,11 +1421,7 @@ NvmeOfStop (
   // Wait for the asynchronous PassThru queue to become empty.
   while (TRUE) {
     OldTpl = gBS->RaiseTPL (TPL_NOTIFY);
-    if (!((&Private->UnsubmittedSubtasks.ForwardLink != NULL) && (&Private->UnsubmittedSubtasks.BackLink != NULL))) {
-      IsEmpty = IsListEmpty (&Private->UnsubmittedSubtasks);
-    } else {
-      IsEmpty = TRUE;
-    }
+    IsEmpty = IsListEmpty (&Private->UnsubmittedSubtasks);
 
     gBS->RestoreTPL (OldTpl);
 

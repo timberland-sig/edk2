@@ -134,6 +134,9 @@ edk_sock_connect (
   TCP6_IO_CONFIG_DATA                                    *Tcp6IoConfig  = NULL;
   TCP_IO                                                 *TcpIo         = NULL;
   UINT8                                                  *Packet        = NULL;
+  UINT16                                                 ConnectTimeout;
+  UINT8                                                  RetryCount;
+  UINT32                                                 Elapsed;
   struct edk_spdk_sock_opts                              *edk_sock_opts = __edk_sock_opts (opts);
 
   opts = __spdk_sock_opts (edk_sock_opts);
@@ -207,37 +210,78 @@ edk_sock_connect (
     goto ErrorExit;
   }
 
-  Status = TcpIoCreateSocket (
-             gImageHandle,
-             SockContext->Controller,
-             (UINT8)(!SockContext->IsIp6 ? TCP_VERSION_4 : TCP_VERSION_6),
-             TcpIoConfig,
-             TcpIo
-             );
+  //
+  // Connect, retrying RetryCount times after the first attempt. The socket is recreated
+  // for every attempt because a TCP instance whose connect failed cannot be reused.
+  //
+  ConnectTimeout = SockContext->ConnectTimeout != 0 ? SockContext->ConnectTimeout : CONNECT_DEFAULT_TIMEOUT;
+  RetryCount     = 0;
+
+  do {
+    Status = TcpIoCreateSocket (
+               gImageHandle,
+               SockContext->Controller,
+               (UINT8)(!SockContext->IsIp6 ? TCP_VERSION_4 : TCP_VERSION_6),
+               TcpIoConfig,
+               TcpIo
+               );
+    if (EFI_ERROR (Status)) {
+      SPDK_ERRLOG ("Socket creation failed: %r\n", Status);
+      goto ErrorExit2;
+    }
+
+    //
+    // Start the timer, and wait ConnectTimeout milliseconds to establish the connection.
+    //
+    Status = gBS->SetTimer (
+                    sock->TimeoutEvent,
+                    TimerRelative,
+                    MultU64x32 (ConnectTimeout, TICKS_PER_MS)
+                    );
+    if (EFI_ERROR (Status)) {
+      SPDK_ERRLOG ("Error setting timer: %r\n", Status);
+      goto ErrorExit3;
+    }
+
+    {
+      UINT64  Start, End, Hz;
+      Start = GetPerformanceCounter ();
+      Status = TcpIoConnect (TcpIo, sock->TimeoutEvent);
+      End   = GetPerformanceCounter ();
+      Hz    = GetPerformanceCounterProperties (NULL, NULL);
+      Elapsed = (UINT32)(Hz ? DivU64x64Remainder ((End - Start) * 1000, Hz, NULL) : 0);
+    }
+
+    //
+    // Cancel the timer and consume any signal it already raised, otherwise the next
+    // TcpIoConnect() sees an armed timeout event and gives up without trying.
+    //
+    gBS->SetTimer (sock->TimeoutEvent, TimerCancel, 0);
+    gBS->CheckEvent (sock->TimeoutEvent);
+
+    if (!EFI_ERROR (Status)) {
+      break;
+    }
+
+    SPDK_ERRLOG ("TcpIoConnect error: %r, attempt %d of %d\n", Status, RetryCount + 1, SockContext->RetryCount + 1);
+    TcpIoDestroySocket (TcpIo);
+
+    //
+    // ConnectTimeout is the budget for one attempt. TcpIoConnect only honors it when the
+    // connection hangs: if the stack fails fast, for example because the link is not
+    // forwarding yet and ARP cannot complete, it returns EFI_ABORTED in a fraction of that
+    // time and every retry is spent at once. Wait out the remainder so the configured
+    // timeout and retry count together describe a real window.
+    //
+    if (Elapsed < ConnectTimeout) {
+      gBS->Stall ((ConnectTimeout - Elapsed) * 1000);
+    }
+
+    RetryCount++;
+  } while (RetryCount <= SockContext->RetryCount);
+
   if (EFI_ERROR (Status)) {
-    SPDK_ERRLOG ("Socket creation failed: %r\n", Status);
     goto ErrorExit2;
-  }
-
-  //
-  // Start the timer, and wait Timeout seconds to establish the TCP connection.
-  //
-  Status = gBS->SetTimer (
-                  sock->TimeoutEvent,
-                  TimerRelative,
-                  MultU64x32 (TIMEOUT, TICKS_PER_MS)
-                  );
-  if (EFI_ERROR (Status)) {
-    SPDK_ERRLOG ("Error setting timer: %r\n", Status);
-    goto ErrorExit3;
-  }
-
-  Status = TcpIoConnect (TcpIo, NULL);
-  gBS->SetTimer (sock->TimeoutEvent, TimerCancel, 0);
-
-  if (EFI_ERROR (Status)) {
-    SPDK_ERRLOG ("TcpIoConnect error: %d\n", Status);
-    goto ErrorExit3;
   }
 
   // TCP connection is established.
@@ -374,11 +418,12 @@ edk_sock_close (
   NetbufFree (sock->Pdu);
 
   assert (TAILQ_EMPTY (&_sock->pending_reqs));
+
+  TcpIoReset (&sock->TcpIo);
   TcpIoDestroySocket (&sock->TcpIo);
   gBS->CloseEvent (sock->TimeoutEvent);
   sock->Context->TcpIo = NULL;
   free (sock);
-  sock = NULL;
 
   return 0;
 }
@@ -495,7 +540,7 @@ _sock_flush (
   //
   Status = TcpIoTransmit (&sock->TcpIo, Pdu);
   if (EFI_ERROR (Status)) {
-    SPDK_ERRLOG ("Error while TcpIoTransmit .%d\n", Status);
+    SPDK_ERRLOG ("Error while TcpIoTransmit .%r\n", Status);
     retval = -1;
     free (writebuf);
     NetbufFree (Pdu);
@@ -506,16 +551,22 @@ _sock_flush (
 
   req = TAILQ_FIRST (&s_sock->queued_reqs);
   for (index = 0; index < req_counter; index++) {
-    s_sock->cb_cnt++;
-    req->cb_fn (req->cb_arg, 0);
+    struct spdk_sock_request  *next = TAILQ_NEXT (req, internal.link);
+
     TAILQ_REMOVE (&s_sock->queued_reqs, req, internal.link);
-    s_sock->cb_cnt--;
+ #ifdef DEBUG
+    req->internal.curr_list = NULL;
+ #endif
     s_sock->queued_iovcnt -= req->iovcnt;
     if (s_sock->queued_iovcnt < 0) {
       s_sock->queued_iovcnt = 0;
     }
 
-    req = TAILQ_NEXT (req, internal.link);
+    s_sock->cb_cnt++;
+    req->cb_fn (req->cb_arg, 0);
+    s_sock->cb_cnt--;
+
+    req = next;
   }
 
   free (writebuf);
@@ -970,6 +1021,9 @@ struct spdk_net_impl  g_edksock_net_impl = {
   .group_impl_close       = edk_sock_group_impl_close,
   .get_opts               = edk_sock_impl_get_opts,
   .set_opts               = edk_sock_impl_set_opts,
+  /* Fields added in SPDK v26: init, get_interface_name, get_numa_id,
+   * connect_async, recv_next, group_impl_get_interruptfd are left NULL
+   * (not used by the EDK2 socket implementation). */
 };
 
 /**

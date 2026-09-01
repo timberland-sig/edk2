@@ -62,15 +62,17 @@ NvmeOfProbeCallback (
   CopyMem (SpdkOpts->hostnqn, NvmeOfData->NvmeofHostNqn, sizeof (NvmeOfData->NvmeofHostNqn));
 
   // Set Kato timeout
-  SpdkOpts->keep_alive_timeout_ms = NVMEOF_KATO_TIMOUT;
+  SpdkOpts->keep_alive_timeout_ms = NVMEOF_KATO_TIMEOUT_SECOND * 1000;
 
   // Fill socket context
   Private     = (NVMEOF_DRIVER_DATA *)CallbackCtx;
   Context     = &Private->Attempt->SocketContext;
   AttemptData = &Private->Attempt->Data;
 
-  Context->Controller = Private->Controller;
-  Context->IsIp6      = AttemptData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP6;
+  Context->Controller     = Private->Controller;
+  Context->IsIp6          = AttemptData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP6;
+  Context->ConnectTimeout = AttemptData->SubsysConfigData.NvmeofTimeout;
+  Context->RetryCount     = AttemptData->SubsysConfigData.NvmeofRetryCount;
 
   if (!Context->IsIp6) {
     CopyMem (
@@ -473,7 +475,7 @@ NvmeOfProbeControllers (
   CopyMem (Trid->trsvcid, Port, sizeof (Port));
   if (nvme_get_transport (Trid->trstring) == NULL) {
     spdk_nvme_transport_register (&g_edk_nvme_tcp_ops);
-    spdk_net_impl_register (&g_edksock_net_impl, DEFAULT_SOCK_PRIORITY);
+    spdk_net_impl_register (&g_edksock_net_impl);
   }
 
   if ((IpVersion == IP_VERSION_4) &&

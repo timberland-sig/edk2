@@ -255,12 +255,18 @@ spdk_process_is_primary (
   return 1;
 }
 
+// SPDK timeouts up to NVME_MAX_ADMIN_TIMEOUT_IN_SECS (30 s), so it needs a counter that does not wrap over that span. 
+// If the platform uses the 24-bit ACPI PM timer, which wraps every ~4.69 s, it is rejected below by ASSERT() rather than 
+// causing timeouts that can never fire.
+static UINT64   mTickHz;
+static BOOLEAN  mTickChecked;
+
 uint64_t
 spdk_get_ticks (
   void
   )
 {
-  return 1;
+  return GetPerformanceCounter ();
 }
 
 uint64_t
@@ -268,8 +274,19 @@ spdk_get_ticks_hz (
   void
   )
 {
-  // similar to emulator
-  return 1000000000ULL;
+  UINT64  End;
+
+  if (!mTickChecked) {
+    mTickChecked = TRUE;
+    mTickHz = GetPerformanceCounterProperties (NULL, &End);
+    if (End != MAX_UINT64) {
+      DEBUG(( DEBUG_ERROR, "SpdkShim: TimerLib counter ends at 0x%lx, not 64-bit; SPDK timeouts cannot work\n", End));
+      ASSERT(End == MAX_UINT64);
+      mTickHz = 0;
+    }
+  }
+
+  return mTickHz;
 }
 
 void
