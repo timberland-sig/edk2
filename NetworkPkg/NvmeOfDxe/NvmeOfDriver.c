@@ -30,7 +30,6 @@
 #include "NvmeOfNbft.h"
 
 EFI_EVENT                       KatoEvent       = NULL;
-EFI_EVENT                       gBeforeEBSEvent = NULL;
 NVMEOF_PRIVATE_PROTOCOL         NVMEOF_Identifier;
 NVMEOF_NIC_PRIVATE_DATA         *mNicPrivate = NULL;
 LIST_ENTRY                      gNvmeOfControllerList;
@@ -39,7 +38,6 @@ extern NVMEOF_CLI_CTRL_MAPPING  *CtrlrInfo;
 CHAR8                           *gNvmeOfRootPath    = NULL;
 BOOLEAN                         gAttemtsAlreadyRead = FALSE;
 CHAR8                           *gNvmeOfImagePath   = NULL;
-BOOLEAN                         gDriverInRuntime    = FALSE;
 
 EFI_GUID  gNvmeOfV4PrivateGuid = NVMEOF_V4_PRIVATE_GUID;
 EFI_GUID  gNvmeOfV6PrivateGuid = NVMEOF_V6_PRIVATE_GUID;
@@ -1375,6 +1373,7 @@ NvmeOfStop (
   NqnNidMapINdex      = 0;
 
   // Clear Nbft related data
+  // But do not touch the NBFT here. Once published it belongs to the OS.
   NvmeofClearNbftData ();
 
   if (IpVersion == IP_VERSION_4) {
@@ -1485,15 +1484,6 @@ NvmeOfStop (
 
   // Remove NIC to be done once only. Comes back for IPv6 binding, hence error ignored.
   NvmeOfRemoveNic (NvmeOfController);
-
-  //
-  // Uninstall the NBFT from ACPI tables, but only during DXE.
-  // This is effectively a workaround for iPXE driver, which
-  // closes its UNDI/SNP protocols during ExitBootServices().
-  //
-  if (!gDriverInRuntime) {
-    NvmeOfPublishNbft (FALSE);
-  }
 
   NET_LIST_FOR_EACH_SAFE (Entry, NextEntryProcessed, &CtrlrInfo->CliCtrlrList) {
     CtrlrInfoData =
@@ -1780,11 +1770,6 @@ NvmeOfDriverUnload (
   UINTN                         DeviceHandleCount;
   EFI_HANDLE                    *DeviceHandleBuffer;
   UINTN                         Index;
-
-  //
-  // Close "before ExitBootServices" event
-  //
-  gBS->CloseEvent (gBeforeEBSEvent);
 
   if (gCliCtrlMap) {
     NvmeOfCliCleanup ();
@@ -2114,22 +2099,6 @@ NvmeOfDriverEntry (
   InitializeListHead (&gCliCtrlMap->CliCtrlrList);
   InitializeListHead (&CtrlrInfo->CliCtrlrList);
   InitializeListHead (&fail_conn);
-
-  //
-  // Create event for BeforeExitBootServices group.
-  //
-  Status = gBS->CreateEventEx (
-                  EVT_NOTIFY_SIGNAL,
-                  TPL_CALLBACK,
-                  NvmeOfBeforeEBS,
-                  NULL,
-                  &gEfiEventBeforeExitBootServicesGuid,
-                  &gBeforeEBSEvent
-                  );
-
-  if (EFI_ERROR (Status)) {
-    goto Error2;
-  }
 
   //
   // Initialize the configuration form of NVMe-oF.

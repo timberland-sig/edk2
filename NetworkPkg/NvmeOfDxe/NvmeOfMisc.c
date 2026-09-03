@@ -1956,29 +1956,6 @@ NvmeOfOnExitBootService (
 }
 
 /**
-  Flip global flag to prevent NBFT changes in DB->Stop()
-  during ExitBootServices().
-
-  @param[in]  Event   The event signaled.
-  @param[in]  Context NULL.
-
-**/
-VOID
-EFIAPI
-NvmeOfBeforeEBS (
-  IN EFI_EVENT  Event,
-  IN VOID       *Context
-  )
-{
-  //
-  // Flip the trigger that driver is currently in runtime stage.
-  // This prevents NBFT from being modified during transition from
-  // DXE stage to RT stage.
-  //
-  gDriverInRuntime = TRUE;
-}
-
-/**
   Create and initialize the NVMe-oF Global data with default values.
 
   If the NV variable 'NvmeofGlobalData' is not found, data will be created and
