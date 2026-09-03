@@ -549,21 +549,6 @@ NvmeOfOnExitBootService (
   );
 
 /**
-  Flip global flag to prevent NBFT changes in DB->Stop()
-  during ExitBootServices().
-
-  @param[in]  Event   The event signaled.
-  @param[in]  Context NULL.
-
-**/
-VOID
-EFIAPI
-NvmeOfBeforeEBS (
-  IN EFI_EVENT  Event,
-  IN VOID       *Context
-  );
-
-/**
   Create and initialize the NVMe-oF Global data with default values.
 
   @retval EFI_SUCCESS             The Global data has been created successfully.
