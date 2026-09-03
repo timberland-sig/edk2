@@ -110,7 +110,6 @@
   gEfiAcpiTableGuid
   gEfiAcpi10TableGuid
   gEfiEventExitBootServicesGuid
-  gEfiEventBeforeExitBootServicesGuid
   gEfiIfrTianoGuid                              ## SOMETIMES_PRODUCES ## UNDEFINED
   gEfiAdapterInfoUndiIpv6SupportGuid            ## SOMETIMES_CONSUMES ## GUID
 

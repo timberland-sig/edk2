@@ -167,7 +167,6 @@ typedef struct _NVME_DEVICE_PRIVATE_DATA     NVME_DEVICE_PRIVATE_DATA;
 typedef struct _NVMEOF_ATTEMPT_ENTRY         NVMEOF_ATTEMPT_ENTRY;
 
 extern NVMEOF_PRIVATE_PROTOCOL  NVMEOF_Identifier;
-extern BOOLEAN                  gDriverInRuntime;
 
 #define NVMEOF_DISCOVERY_NQN  "nqn.2014-08.org.nvmexpress.discovery"
 typedef struct _NVMEOF_DRIVER_DATA {
