@@ -19,9 +19,14 @@
 #define CONNECT_TIMEOUT  5000
 
 EFI_HANDLE                      mImageHandle;
+//
+// Connections the CLI made itself. NvmeOfCliDeleteMapEntries() frees both Private and Private->Attempt through
+// these entries, and may do so only because nothing from the driver path is ever inserted here. Keep the two
+// lists apart: see gDriverCtrlMap in NvmeOfSpdk.c.
+//
 NVMEOF_CLI_CTRL_MAPPING         *gCliCtrlMap      = NULL;
 NVMEOF_CONNECT_COMMAND          *ProbeconnectData = NULL;
-extern NVMEOF_CLI_CTRL_MAPPING  *CtrlrInfo;
+extern NVMEOF_CLI_CTRL_MAPPING  *gDriverCtrlMap;
 
 extern NVMEOF_NBFT  gNvmeOfNbftList[NID_MAX];
 extern UINT8        gNvmeOfNbftListIndex;
@@ -293,7 +298,7 @@ NvmeOfCliIsBlockCtrlr (
       NsidCli = MappingList->Nsid;
     }
   }
-  NET_LIST_FOR_EACH (Entry, &CtrlrInfo->CliCtrlrList) {
+  NET_LIST_FOR_EACH (Entry, &gDriverCtrlMap->CliCtrlrList) {
     MappingList = NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
     if (  (!AsciiStriCmp (TraddrCli, MappingList->Traddr)) && (!AsciiStriCmp (SubnqnCli, MappingList->Subnqn))
        && (NsidCli == MappingList->Nsid))
@@ -511,7 +516,7 @@ NvmeOfCliListConnect (
   const struct spdk_uuid             *uuid;
   char                               uuid_str[SPDK_UUID_STRING_LEN];
 
-  NET_LIST_FOR_EACH (Entry, &CtrlrInfo->CliCtrlrList) {
+  NET_LIST_FOR_EACH (Entry, &gDriverCtrlMap->CliCtrlrList) {
     MappingList = NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
     cdata       = spdk_nvme_ctrlr_get_data ((struct spdk_nvme_ctrlr *)MappingList->Ctrlr);
     ns          = spdk_nvme_ctrlr_get_ns (
@@ -1221,7 +1226,7 @@ NvmeOfCliProbeCallback (
   // Fill socket context
   Private     = (NVMEOF_DRIVER_DATA *)CallbackCtx;
   AttemptData = &Private->Attempt->Data;
-  Context     = &Private->Attempt->SocketContext;
+  Context     = &EdkOpts->sock_ctx;
 
   Context->Controller = Private->Controller;
   Context->IsIp6      = AttemptData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP6;
@@ -1246,7 +1251,6 @@ NvmeOfCliProbeCallback (
       );
   }
 
-  EdkOpts->sock_ctx = Context;
   return TRUE;
 }
 
@@ -1601,7 +1605,7 @@ InstallControllerHandler (
   }
 
   if (AttemptFound == TRUE) {
-    Private = NvmeOfCreateDriverData (mImageHandle, DeviceHandleBuffer[Index]);
+    Private = NvmeOfCreateDriverData (mImageHandle, DeviceHandleBuffer[Index], IP_VERSION_4);
     if (Private == NULL) {
       FreePool (AttemptEntry);
       DEBUG ((DEBUG_ERROR, "Error allocating driver private structure .\n"));

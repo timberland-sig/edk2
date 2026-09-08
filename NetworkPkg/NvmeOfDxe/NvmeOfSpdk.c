@@ -25,7 +25,13 @@ UINT8                                        NqnNidMapINdex       = 0;
 UINT8                                        gNvmeOfNbftListIndex = 0;
 extern const struct spdk_nvme_transport_ops  g_edk_nvme_tcp_ops;
 extern struct spdk_net_impl                  g_edksock_net_impl;
-NVMEOF_CLI_CTRL_MAPPING                      *CtrlrInfo = NULL;
+//
+// Devices the driver attached, one entry per namespace, added by NvmeOfAttachControllers(). The CLI reads this
+// list to report what is connected, but must never free from it: the attempt behind an entry here is still
+// linked into mNicPrivate->AttemptConfigs and belongs to NvmeOfStart(). Entries here leave Private NULL, which
+// is what keeps NvmeOfCliDeleteMapEntries() away. Its own list is gCliCtrlMap in NvmeOfCliInterface.c.
+//
+NVMEOF_CLI_CTRL_MAPPING                      *gDriverCtrlMap = NULL;
 STATIC struct spdk_nvmf_discovery_log_page   *gDiscoveryPage;
 STATIC UINT32                                gDiscoveryPageSize;
 STATIC UINT64                                gDiscoveryPage_numrec;
@@ -66,7 +72,7 @@ NvmeOfProbeCallback (
 
   // Fill socket context
   Private     = (NVMEOF_DRIVER_DATA *)CallbackCtx;
-  Context     = &Private->Attempt->SocketContext;
+  Context     = &EdkOpts->sock_ctx;
   AttemptData = &Private->Attempt->Data;
 
   Context->Controller     = Private->Controller;
@@ -93,8 +99,6 @@ NvmeOfProbeCallback (
       sizeof (EFI_IPv4_ADDRESS)
       );
   }
-
-  EdkOpts->sock_ctx = Context;
 
   DEBUG ((DEBUG_INFO, "Attaching to %a\n", Trid->traddr));
   FreePool (NvmeOfData);
@@ -237,9 +241,8 @@ NvmeOfAttachCallback (
       continue;
     }
 
-    Private->TcpIo = Private->Attempt->SocketContext.TcpIo;
-    ASSERT (Private->TcpIo != NULL);
-    Device->TcpIo = Private->TcpIo;
+    Device->TcpIo = edk_nvme_tcp_ctrlr_get_tcpio (Ctrlr);
+    ASSERT (Device->TcpIo != NULL);
 
     // For CLI ListConnected command
     MappingData = AllocateZeroPool (sizeof (NVMEOF_CLI_CTRL_MAPPING));
@@ -337,8 +340,7 @@ NvmeOfAttachCallback (
       UuidStr
       );
 
-    // If a valid NID input provided in attempt, mount only the said NID
-    // and ignore all others.
+    // If a valid NID input provided in attempt, mount only the said NID and ignore all others.
     if (IsUuidValid (AttemptData->SubsysConfigData.NvmeofSubsysNid)) {
       if (spdk_nvme_ns_get_uuid (Namespace) == NULL) {
         spdk_uuid_fmt_lower (UuidStr, SPDK_UUID_STRING_LEN, (struct spdk_uuid *)spdk_nvme_ns_get_nguid (Namespace));
@@ -363,7 +365,7 @@ NvmeOfAttachCallback (
         FreePool (Device);
         continue;
       } else {
-        InsertTailList (&CtrlrInfo->CliCtrlrList, &MappingData->CliCtrlrList);
+        InsertTailList (&gDriverCtrlMap->CliCtrlrList, &MappingData->CliCtrlrList);
       }
     }
 
@@ -371,7 +373,13 @@ NvmeOfAttachCallback (
     if (gNvmeOfNbftListIndex < NID_MAX) {
       gNvmeOfNbftList[gNvmeOfNbftListIndex].Device      = Device;
       gNvmeOfNbftList[gNvmeOfNbftListIndex].AttemptData = AttemptData;
+      gNvmeOfNbftList[gNvmeOfNbftListIndex].RootPath    = NvmeOfCopyPendingRootPath ();
       gNvmeOfNbftListIndex++;
+
+      // The NBFT wants the host IPv6 address
+      if (Private->IpVersion == IP_VERSION_6) {
+        NvmeOfGetIp6NicInfo (&AttemptData->SubsysConfigData, Device->TcpIo);
+      }
     }
   }
 
@@ -419,6 +427,7 @@ InsertFailNodeNbft (
   }
 
   gNvmeOfNbftList[gNvmeOfNbftListIndex].AttemptData = AttemptConfigData;
+  gNvmeOfNbftList[gNvmeOfNbftListIndex].RootPath    = NvmeOfCopyPendingRootPath ();
   gNvmeOfNbftList[gNvmeOfNbftListIndex].IsFailed    = TRUE;
 }
 
@@ -459,11 +468,8 @@ NvmeOfProbeControllers (
 
   Trid->trtype = SPDK_NVME_TRANSPORT_TCP;
   CopyMem (Trid->trstring, SPDK_NVME_TRANSPORT_NAME_TCP, SPDK_NVMF_TRSTRING_MAX_LEN);
-  CopyMem (
-    Trid->subnqn,
-    AttemptConfigData->SubsysConfigData.NvmeofSubsysNqn,
-    sizeof (AttemptConfigData->SubsysConfigData.NvmeofSubsysNqn)
-    );
+  CopyMem (Trid->subnqn, AttemptConfigData->SubsysConfigData.NvmeofSubsysNqn,
+           sizeof (AttemptConfigData->SubsysConfigData.NvmeofSubsysNqn));
   if (AsciiStriCmp (AttemptConfigData->SubsysConfigData.NvmeofSubsysNqn, NVMEOF_DISCOVERY_NQN) == 0) {
     Private->IsDiscoveryNqn = TRUE;
   } else {
@@ -483,9 +489,7 @@ NvmeOfProbeControllers (
        (AttemptConfigData->AutoConfigureMode == IP_MODE_AUTOCONFIG_IP4)))
   {
     Trid->adrfam = SPDK_NVMF_ADRFAM_IPV4;
-    sprintf (
-      Ipv4Addr,
-      "%d.%d.%d.%d",
+    sprintf (Ipv4Addr, "%d.%d.%d.%d",
       AttemptConfigData->SubsysConfigData.NvmeofSubSystemIp.v4.Addr[0],
       AttemptConfigData->SubsysConfigData.NvmeofSubSystemIp.v4.Addr[1],
       AttemptConfigData->SubsysConfigData.NvmeofSubSystemIp.v4.Addr[2],
@@ -505,13 +509,7 @@ NvmeOfProbeControllers (
   }
 
   DEBUG ((DEBUG_INFO, "Probe/Connect NQN: %a\n", AttemptConfigData->SubsysConfigData.NvmeofSubsysNqn));
-  if (spdk_nvme_probe (
-        Trid,
-        Private,
-        NvmeOfProbeCallback,
-        NvmeOfAttachCallback,
-        NULL
-        ) != 0)
+  if (spdk_nvme_probe (Trid, Private, NvmeOfProbeCallback, NvmeOfAttachCallback, NULL) != 0)
   {
     DEBUG ((DEBUG_ERROR, "spdk_nvme_probe() failed for  %a\n", Trid->traddr));
     // Filling attempt data for connecion failure case for IO & Discovery controller
@@ -530,9 +528,8 @@ NvmeOfProbeControllers (
       }
 
       spdk_nvme_ctrlr_get_default_ctrlr_opts (&Opts, sizeof (Opts));
-      EdkOpts.base     = &Opts;
-      EdkOpts.sock_ctx = NULL;
-      NvmeOfProbeCallback (NULL, Trid, (struct spdk_nvme_ctrlr_opts *)&EdkOpts);
+      EdkOpts.base = &Opts;
+      NvmeOfProbeCallback (Private, Trid, (struct spdk_nvme_ctrlr_opts *)&EdkOpts);
       Ctrlr = nvme_transport_ctrlr_construct (Trid, (const struct spdk_nvme_ctrlr_opts *)&EdkOpts, NULL);
       if (Ctrlr) {
         NVMeOfGetAsqz (Ctrlr);
@@ -711,7 +708,16 @@ NVMeOfGetAsqz (
         continue;
       }
 
-      IsDiscovery = gNvmeOfNbftList[NCntr].Device->Controller->IsDiscoveryNqn;
+      //
+      // Ask this entry, not the driver data. Every device on the list points at the same NVMEOF_DRIVER_DATA,
+      // and this loop runs from inside the discovery branch of NvmeOfProbeControllers(), so reading the flag
+      // there returned TRUE for every entry and the match below came down to traddr alone. A device reached
+      // through a discovery attempt carries that attempt config, so its NQN is the discovery NQN.
+      //
+      IsDiscovery = (BOOLEAN)(AsciiStriCmp (
+                                gNvmeOfNbftList[NCntr].AttemptData->SubsysConfigData.NvmeofSubsysNqn,
+                                NVMEOF_DISCOVERY_NQN
+                                ) == 0);
       TrAddress   = gNvmeOfNbftList[NCntr].Device->NameSpace->ctrlr->trid.traddr;
 
       if ((IsDiscovery == true) && (AsciiStrCmp (TrAddress, (CHAR8 *)Entry->traddr) == 0)) {

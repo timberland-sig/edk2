@@ -92,7 +92,6 @@ NvmeOfResetController (
   spdk_nvme_ctrlr_disconnect_io_qpair (Device->qpair);
 
   Status = spdk_nvme_ctrlr_reset (Device->NameSpace->ctrlr);
-  Device->TcpIo = Device->Controller->TcpIo;
   if (EFI_ERROR (Status)) {
     Status = EFI_DEVICE_ERROR;
   }

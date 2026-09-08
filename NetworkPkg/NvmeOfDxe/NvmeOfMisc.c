@@ -105,6 +105,7 @@ NvmeOfRemoveNic (
   LIST_ENTRY            *Entry;
   LIST_ENTRY            *NextEntry;
   NVMEOF_NIC_INFO       *ThisNic;
+  UINT8                 NicIndex;
   NVMEOF_ATTEMPT_ENTRY  *AttemptEntry;
   EFI_MAC_ADDRESS       MacAddr;
   UINTN                 HwAddressSize;
@@ -143,20 +144,18 @@ NvmeOfRemoveNic (
     return EFI_NOT_FOUND;
   }
 
-  mNicPrivate->CurrentNic = ThisNic->NicIndex;
+  NicIndex = ThisNic->NicIndex;
 
   RemoveEntryList (&ThisNic->Link);
   FreePool (ThisNic);
-  mNicPrivate->NicCount--;
 
   //
   // Remove all attempts related to this NIC.
   //
   NET_LIST_FOR_EACH_SAFE (Entry, NextEntry, &mNicPrivate->AttemptConfigs) {
     AttemptEntry = NET_LIST_USER_STRUCT (Entry, NVMEOF_ATTEMPT_ENTRY, Link);
-    if (AttemptEntry->Data.NicIndex == mNicPrivate->CurrentNic) {
+    if (AttemptEntry->Data.NicIndex == NicIndex) {
       RemoveEntryList (&AttemptEntry->Link);
-      mNicPrivate->AttemptCount--;
       FreePool (AttemptEntry);
     }
   }
@@ -224,6 +223,8 @@ NvmeOfGetNicPciLocation (
 
   @param[in]  Controller         The handle of the controller.
   @param[in]  Image              Handle of the image.
+  @param[out] ThisNic            The NIC this controller belongs to, whether newly
+                                 recorded or already known. Set on every success.
 
   @retval EFI_SUCCESS            The operation is completed.
   @retval EFI_OUT_OF_RESOURCES   Do not have sufficient resources to finish this
@@ -232,8 +233,9 @@ NvmeOfGetNicPciLocation (
 **/
 EFI_STATUS
 NvmeOfSaveNic (
-  IN EFI_HANDLE  Controller,
-  IN EFI_HANDLE  Image
+  IN  EFI_HANDLE       Controller,
+  IN  EFI_HANDLE       Image,
+  OUT NVMEOF_NIC_INFO  **ThisNic
   )
 {
   EFI_STATUS       Status;
@@ -242,6 +244,8 @@ NvmeOfSaveNic (
   EFI_MAC_ADDRESS  MacAddr;
   UINTN            HwAddressSize = 0;
   UINT16           VlanId        = 0;
+
+  *ThisNic = NULL;
 
   //
   // Get MAC address of this network device.
@@ -265,7 +269,7 @@ NvmeOfSaveNic (
         (CompareMem (&NicInfo->PermanentAddress, MacAddr.Addr, HwAddressSize) == 0) &&
         (NicInfo->VlanId == VlanId))
     {
-      mNicPrivate->CurrentNic = NicInfo->NicIndex;
+      *ThisNic = NicInfo;
 
       return EFI_SUCCESS;
     }
@@ -300,9 +304,8 @@ NvmeOfSaveNic (
     );
 
   InsertTailList (&mNicPrivate->NicInfoList, &NicInfo->Link);
-  mNicPrivate->NicCount++;
 
-  mNicPrivate->CurrentNic = NicInfo->NicIndex;
+  *ThisNic = NicInfo;
   return EFI_SUCCESS;
 }
 
@@ -311,6 +314,8 @@ NvmeOfSaveNic (
 
   @param[in] Image      The handle of the driver image.
   @param[in] Controller The handle of the controller.
+  @param[in] IpVersion  IP_VERSION_4 or IP_VERSION_6. Selects which of the two
+                        DriverBinding passes this call belongs to.
 
   @return The NvmeOf driver data created.
   @retval NULL Other errors as indicated.
@@ -319,7 +324,8 @@ NvmeOfSaveNic (
 NVMEOF_DRIVER_DATA *
 NvmeOfCreateDriverData (
   IN EFI_HANDLE  Image,
-  IN EFI_HANDLE  Controller
+  IN EFI_HANDLE  Controller,
+  IN UINT8       IpVersion
   )
 {
   NVMEOF_DRIVER_DATA  *Private;
@@ -332,6 +338,7 @@ NvmeOfCreateDriverData (
   Private->Signature                 = NVMEOF_DRIVER_DATA_SIGNATURE;
   Private->Image                     = Image;
   Private->Controller                = Controller;
+  Private->IpVersion                 = IpVersion;
   Private->NvmeOfIdentifier.Reserved = 0;
   InitializeListHead (&Private->UnsubmittedSubtasks);
 
@@ -653,7 +660,6 @@ NvmeOfReadConfigData (
     // Insert new created attempt to array.
     //
     InsertTailList (&mNicPrivate->AttemptConfigs, &Attempt->Link);
-    mNicPrivate->AttemptCount++;
   }
 
   Status = EFI_SUCCESS;
@@ -802,6 +808,8 @@ NvmeOfGetNicInfoByIndex (
 
   @param[in] Image      The handle of the driver image.
   @param[in] Controller The handle of the controller.
+  @param[in] IpVersion  IP_VERSION_4 or IP_VERSION_6. Selects which of the two
+                        DriverBinding passes this call belongs to.
   @param[in/out]  AttemptConfigData   Attempt data.
 
   @retval EFI_SUCCESS            The configuration data is retrieved.
@@ -813,6 +821,7 @@ EFI_STATUS
 NvmeOfGetConfigData (
   IN EFI_HANDLE                        Image,
   IN EFI_HANDLE                        Controller,
+  IN UINT8                             IpVersion,
   IN OUT NVMEOF_ATTEMPT_CONFIG_NVDATA  *AttemptConfigData
   )
 {
@@ -823,7 +832,7 @@ NvmeOfGetConfigData (
     AttemptConfigData->SubsysConfigData.NvmeofSubsysInfoDhcp = TRUE;
 
     AttemptConfigData->AutoConfigureMode =
-      (UINT8)(mNicPrivate->Ipv6Flag ? IP_MODE_AUTOCONFIG_IP6 : IP_MODE_AUTOCONFIG_IP4);
+      (UINT8)((IpVersion == IP_VERSION_6) ? IP_MODE_AUTOCONFIG_IP6 : IP_MODE_AUTOCONFIG_IP4);
     AttemptConfigData->AutoConfigureSuccess = FALSE;
   }
 
@@ -831,7 +840,7 @@ NvmeOfGetConfigData (
   // Get some information from dhcp server.
   //
   if (AttemptConfigData->SubsysConfigData.HostInfoDhcp || AttemptConfigData->SubsysConfigData.NvmeofSubsysInfoDhcp) {
-    if (!mNicPrivate->Ipv6Flag &&
+    if ((IpVersion == IP_VERSION_4) &&
         ((AttemptConfigData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP4) ||
          (AttemptConfigData->AutoConfigureMode == IP_MODE_AUTOCONFIG_IP4)))
     {
@@ -839,7 +848,7 @@ NvmeOfGetConfigData (
       if (!EFI_ERROR (Status)) {
         AttemptConfigData->DhcpSuccess = TRUE;
       }
-    } else if (mNicPrivate->Ipv6Flag &&
+    } else if ((IpVersion == IP_VERSION_6) &&
                ((AttemptConfigData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP6) ||
                 (AttemptConfigData->AutoConfigureMode == IP_MODE_AUTOCONFIG_IP6)))
     {
@@ -971,56 +980,6 @@ NvmeOfAsciiStrToNid (
 }
 
 /**
-Get the attempt for NIC being used.
-
-@param[out]  AttemptData       Pointer to attempt structure for the NIC
-
-@retval EFI_SUCCESS            Found attempt for the NIC
-@retval EFI_NOT_FOUND          No attempt for current NIC
-
-**/
-EFI_STATUS
-NvmeOfGetAttemptForCurrentNic (
-  OUT NVMEOF_ATTEMPT_CONFIG_NVDATA  **AttemptData
-  )
-{
-  CHAR16                AttemptMacString[NVMEOF_MAX_MAC_STRING_LEN];
-  NVMEOF_ATTEMPT_ENTRY  *AttemptEntry;
-  CHAR16                MacString[NVMEOF_MAX_MAC_STRING_LEN];
-  NVMEOF_NIC_INFO       *NicInfo;
-  LIST_ENTRY            *Entry;
-  LIST_ENTRY            *NextEntry;
-
-  NET_LIST_FOR_EACH_SAFE (Entry, NextEntry, &mNicPrivate->AttemptConfigs) {
-    AttemptEntry = NET_LIST_USER_STRUCT (Entry, NVMEOF_ATTEMPT_ENTRY, Link);
-
-    // Get the Nic information from the NIC list
-    NicInfo = NvmeOfGetNicInfoByIndex (mNicPrivate->CurrentNic);
-    ASSERT (NicInfo != NULL);
-    NvmeOfMacAddrToStr (
-      &NicInfo->PermanentAddress,
-      NicInfo->HwAddressSize,
-      NicInfo->VlanId,
-      MacString
-      );
-
-    AsciiStrToUnicodeStrS (
-      AttemptEntry->Data.MacString,
-      AttemptMacString,
-      sizeof (AttemptMacString) / sizeof (AttemptMacString[0])
-      );
-    if (StrCmp (MacString, AttemptMacString) != 0) {
-      continue;
-    } else {
-      *AttemptData = &AttemptEntry->Data;
-      return EFI_SUCCESS;
-    }
-  }
-
-  return EFI_NOT_FOUND;
-}
-
-/**
   Get the device path of the NvmeOf tcp connection and update it.
 
   @param  Private       Drivers private structure.
@@ -1059,7 +1018,7 @@ NvmeOfGetTcpConnectionDevicePath (
 
   while (!IsDevicePathEnd (&DPathNode->DevPath)) {
     if (DevicePathType (&DPathNode->DevPath) == MESSAGING_DEVICE_PATH) {
-      if (!mNicPrivate->Ipv6Flag && (DevicePathSubType (&DPathNode->DevPath) == MSG_IPv4_DP)) {
+      if ((Device->Controller->IpVersion == IP_VERSION_4) && (DevicePathSubType (&DPathNode->DevPath) == MSG_IPv4_DP)) {
         DPathNode->Ipv4.LocalPort = 0;
 
         DPathNode->Ipv4.StaticIpAddress =
@@ -1080,7 +1039,7 @@ NvmeOfGetTcpConnectionDevicePath (
         }
 
         break;
-      } else if (mNicPrivate->Ipv6Flag && (DevicePathSubType (&DPathNode->DevPath) == MSG_IPv6_DP)) {
+      } else if ((Device->Controller->IpVersion == IP_VERSION_6) && (DevicePathSubType (&DPathNode->DevPath) == MSG_IPv6_DP)) {
         DPathNode->Ipv6.LocalPort = 0;
         PathLen                   = DevicePathNodeLength (&DPathNode->Ipv6);
         if (PathLen == IP6_NODE_LEN_NEW_VERSIONS) {
@@ -1132,7 +1091,7 @@ NvmeOfBuildDevicePath (
   UINTN                     DevPathNodeLen;
 
   // Get the Nic information from the NIC list
-  NicInfo = NvmeOfGetNicInfoByIndex (mNicPrivate->CurrentNic);
+  NicInfo = NvmeOfGetNicInfoByIndex (AttemptData->NicIndex);
   ASSERT (NicInfo != NULL);
 
   // Create ACPI device path for PciRoot
@@ -1497,12 +1456,40 @@ NvmeOfSaveRootPathForNbft (
   IN  UINT32  Length
   )
 {
-  gNvmeOfRootPath = NULL;
+  //
+  // DHCP runs once per attempt, so this holds the path for the attempt being processed. Release the previous
+  // one: NBFT entries take their own copy, so nothing outside this function points at it.
+  //
+  if (gNvmeOfRootPath != NULL) {
+    FreePool (gNvmeOfRootPath);
+  }
+
   gNvmeOfRootPath = (CHAR8 *)AllocatePool (Length + 1);
   if (gNvmeOfRootPath != NULL) {
     CopyMem (gNvmeOfRootPath, RootPath, Length);
     gNvmeOfRootPath[Length] = '\0';
   }
+}
+
+/**
+  Copy the root path DHCP saved for the attempt being processed, for one NBFT entry to own.
+
+  Each entry keeps its own copy because one attempt can produce several: a discovery attempt adds an entry per
+  namespace it reaches, and they all share the root path DHCP supplied for that attempt.
+
+  @return  A copy the caller must free, or NULL if DHCP supplied no root path.
+
+**/
+CHAR8 *
+NvmeOfCopyPendingRootPath (
+  VOID
+  )
+{
+  if ((gNvmeOfRootPath == NULL) || (gNvmeOfRootPath[0] == '\0')) {
+    return NULL;
+  }
+
+  return AllocateCopyPool (AsciiStrSize (gNvmeOfRootPath), gNvmeOfRootPath);
 }
 
 /**

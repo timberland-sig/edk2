@@ -36,12 +36,12 @@ struct nvme_tcp_ctrlr {
 
 struct edk_nvme_tcp_ctrlr {
   struct spdk_nvme_ctrlr    ctrlr;
-  //
-  // Additional context for socket creation.
-  // In UEFI use case, this field allows to provide additional information
-  // required for TcpIo instance creation.
-  //
-  void                      *edk_sock_ctx;
+
+  // edk_nvme_tcp_qpair_connect_sock() hands the address of this field to the socket layer, which
+  // stores it as spdk_edk_sock.Context in edk_sock_connect(). The socket writes its TCP_IO
+  // through that pointer and clears it on close. The controller outlives its sockets, so the
+  // pointer stays good.
+  struct spdk_edk_sock_ctx  edk_sock_ctx;
 };
 
 struct nvme_tcp_poll_group {
@@ -203,6 +203,14 @@ edk_nvme_tcp_ctrlr (
 {
   assert (ctrlr->trid.trtype == SPDK_NVME_TRANSPORT_TCP);
   return SPDK_CONTAINEROF (ctrlr, struct edk_nvme_tcp_ctrlr, ctrlr);
+}
+
+TCP_IO *
+edk_nvme_tcp_ctrlr_get_tcpio (
+  struct spdk_nvme_ctrlr  *ctrlr
+  )
+{
+  return edk_nvme_tcp_ctrlr (ctrlr)->edk_sock_ctx.TcpIo;
 }
 
 static struct nvme_tcp_req *
@@ -2109,7 +2117,7 @@ edk_nvme_tcp_qpair_connect_sock (
   opts.priority = ctrlr->trid.priority;
   opts.zcopy    = !nvme_qpair_is_admin_queue (qpair);
 
-  edk_sock_opts.ctx = edk_trctrlr->edk_sock_ctx;
+  edk_sock_opts.ctx = &edk_trctrlr->edk_sock_ctx;
 
   if (ctrlr->opts.transport_ack_timeout) {
     opts.ack_timeout = 1ULL << ctrlr->opts.transport_ack_timeout;
@@ -2349,7 +2357,11 @@ edk_nvme_tcp_ctrlr_construct (
     return NULL;
   }
 
+  //
+  // Copy, do not alias. edk_opts dies when edk_nvme_ctrlr_probe() returns.
+  //
   tctrlr->edk_sock_ctx = edk_opts->sock_ctx;
+
   tctrlr->ctrlr.opts   = *spdk_opts;
   tctrlr->ctrlr.trid   = *trid;
 
