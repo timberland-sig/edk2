@@ -153,15 +153,9 @@ nvme_fabric_get_discovery_log_page (
     return -1;
   }
 
-  if (nvme_wait_for_completion_poll (ctrlr->adminq, status)) {
-    if (!status->timed_out) {
-      free (status);
-    }
-
+  if (nvme_wait_for_adminq_completion (ctrlr, status, true)) {
     return -1;
   }
-
-  free (status);
 
   return 0;
 }
@@ -243,7 +237,7 @@ edk_fabric_ctrlr_scan (
 
   spdk_nvme_ctrlr_get_default_ctrlr_opts (&discovery_opts, sizeof (discovery_opts));
   edk_opts.base     = &discovery_opts;
-  edk_opts.sock_ctx = NULL;
+  ZeroMem (&edk_opts.sock_ctx, sizeof (edk_opts.sock_ctx));
   if (probe_ctx->probe_cb) {
     probe_ctx->probe_cb (probe_ctx->cb_ctx, &probe_ctx->trid, (struct spdk_nvme_ctrlr_opts *)&edk_opts);
   }
@@ -286,17 +280,11 @@ edk_fabric_ctrlr_scan (
     return rc;
   }
 
-  if (nvme_wait_for_completion_poll (discovery_ctrlr->adminq, status)) {
+  if (nvme_wait_for_adminq_completion (discovery_ctrlr, status, true)) {
     SPDK_ERRLOG ("nvme_identify_controller failed!\n");
     nvme_ctrlr_destruct (discovery_ctrlr);
-    if (!status->timed_out) {
-      free (status);
-    }
-
     return -ENXIO;
   }
-
-  free (status);
 
   /* Direct attach through spdk_nvme_connect() API */
   if (direct_connect == true) {

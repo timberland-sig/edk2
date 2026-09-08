@@ -161,9 +161,14 @@ edk_sock_connect (
     ip = (const char *)&buf[0];
   }
 
-  ASSERT (edk_sock_opts->ctx != NULL);
+  SockContext = (struct spdk_edk_sock_ctx *)edk_sock_opts->ctx;
 
-  SockContext   = (struct spdk_edk_sock_ctx *)edk_sock_opts->ctx;
+  //
+  // The context is the controller's, so it is never NULL. A zeroed Controller means the probe
+  // callback never filled it in.
+  //
+  ASSERT (SockContext != NULL);
+  ASSERT (SockContext->Controller != NULL);
   sock->Context = SockContext;
   TcpIoConfig   = &sock->TcpIoConfig;
   TcpIo         = &sock->TcpIo;

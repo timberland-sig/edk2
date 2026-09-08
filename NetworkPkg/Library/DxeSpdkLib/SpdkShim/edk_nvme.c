@@ -24,7 +24,7 @@ edk_nvme_ctrlr_probe (
   DEBUG ((DEBUG_INFO, "Probe trid: %s\n", trid->traddr));
   spdk_nvme_ctrlr_get_default_ctrlr_opts (&opts, sizeof (opts));
   edk_opts.base     = &opts;
-  edk_opts.sock_ctx = NULL;
+  ZeroMem (&edk_opts.sock_ctx, sizeof (edk_opts.sock_ctx));
   if (!probe_ctx->probe_cb || probe_ctx->probe_cb (probe_ctx->cb_ctx, trid, (struct spdk_nvme_ctrlr_opts *)&edk_opts)) {
     ctrlr = nvme_get_ctrlr_by_trid_unsafe (trid, opts.hostnqn);
     if (ctrlr) {

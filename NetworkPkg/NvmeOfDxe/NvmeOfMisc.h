@@ -65,6 +65,8 @@ NvmeOfTestManagedDevice (
 
   @param[in] Image      The handle of the driver image.
   @param[in] Controller The handle of the controller.
+  @param[in] IpVersion  IP_VERSION_4 or IP_VERSION_6. Selects which of the two
+                        DriverBinding passes this call belongs to.
 
   @return The NvmeOf driver data created.
   @retval NULL Other errors as indicated.
@@ -74,7 +76,8 @@ NvmeOfTestManagedDevice (
 NVMEOF_DRIVER_DATA *
 NvmeOfCreateDriverData (
   IN EFI_HANDLE  Image,
-  IN EFI_HANDLE  Controller
+  IN EFI_HANDLE  Controller,
+  IN UINT8       IpVersion
   );
 
 /**
@@ -135,6 +138,8 @@ NvmeOfDnsIsConfigured (
 
   @param[in]  Controller         The handle of the controller.
   @param[in]  Image              Handle of the image.
+  @param[out] ThisNic            The NIC this controller belongs to, whether newly
+                                 recorded or already known. Set on every success.
 
   @retval EFI_SUCCESS            The operation is completed.
   @retval EFI_OUT_OF_RESOURCES   Do not have sufficient resource to finish this
@@ -143,8 +148,9 @@ NvmeOfDnsIsConfigured (
 **/
 EFI_STATUS
 NvmeOfSaveNic (
-  IN EFI_HANDLE  Controller,
-  IN EFI_HANDLE  Image
+  IN  EFI_HANDLE       Controller,
+  IN  EFI_HANDLE       Image,
+  OUT NVMEOF_NIC_INFO  **ThisNic
   );
 
 /**
@@ -218,6 +224,8 @@ NvmeOfMacAddrToStr (
 
   @param[in] Image      The handle of the driver image.
   @param[in] Controller The handle of the controller.
+  @param[in] IpVersion  IP_VERSION_4 or IP_VERSION_6. Selects which of the two
+                        DriverBinding passes this call belongs to.
   @param[in/out]  AttemptConfigData   Attempt data.
 
   @retval EFI_SUCCESS            The configuration data is retrieved.
@@ -229,6 +237,7 @@ EFI_STATUS
 NvmeOfGetConfigData (
   IN EFI_HANDLE                        Image,
   IN EFI_HANDLE                        Controller,
+  IN UINT8                             IpVersion,
   IN OUT NVMEOF_ATTEMPT_CONFIG_NVDATA  *AttemptConfigData
   );
 
@@ -278,20 +287,6 @@ EFI_STATUS
 NvmeOfAsciiStrToNid (
   IN  CHAR8  *Str,
   OUT CHAR8  *NID
-  );
-
-/**
-Get the attempt for NIC being used.
-
-@param[out]  AttemptData       Pointer to attempt structure for the NIC
-
-@retval EFI_SUCCESS            Found attempt for the NIC
-@retval EFI_NOT_FOUND          No attempt for current NIC
-
-**/
-EFI_STATUS
-NvmeOfGetAttemptForCurrentNic (
-  OUT NVMEOF_ATTEMPT_CONFIG_NVDATA  **AttemptData
   );
 
 /**
@@ -419,6 +414,17 @@ VOID
 NvmeOfSaveRootPathForNbft (
   IN  CHAR8   *RootPath,
   IN  UINT32  Length
+  );
+
+/**
+  Copy the root path DHCP saved for the attempt being processed, for one NBFT entry to own.
+
+  @return  A copy the caller must free, or NULL if DHCP supplied no root path.
+
+**/
+CHAR8 *
+NvmeOfCopyPendingRootPath (
+  VOID
   );
 
 /**
