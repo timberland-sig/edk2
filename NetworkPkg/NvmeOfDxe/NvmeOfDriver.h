@@ -173,10 +173,10 @@ typedef struct _NVMEOF_DRIVER_DATA {
   UINT32                     Signature;
   EFI_HANDLE                 Image;
   EFI_HANDLE                 Controller;
+  UINT8                      IpVersion; // IP_VERSION_4 or IP_VERSION_6, fixed when this data is created
   NVMEOF_PRIVATE_PROTOCOL    NvmeOfIdentifier;
   EFI_EVENT                  ExitBootServiceEvent;
   EFI_HANDLE                 ChildHandle;
-  TCP_IO                     *TcpIo;
   BOOLEAN                    IsDiscoveryNqn;
   EFI_HANDLE                 NvmeOfProtocolHandle;
   LIST_ENTRY                 UnsubmittedSubtasks;
@@ -229,18 +229,9 @@ extern EFI_DRIVER_SUPPORTED_EFI_VERSION_PROTOCOL  gNvmeOfDriverSupportedEfiVersi
 #define NVMEOF_NAME_IFR_MAX_SIZE  223
 
 typedef struct {
-  CHAR16        PortString[NVMEOF_NAME_IFR_MAX_SIZE];
   LIST_ENTRY    NicInfoList;
-  UINT8         NicCount;
-  UINT8         CurrentNic;
   UINT8         MaxNic;
-  BOOLEAN       Ipv6Flag;
-  UINT8         AttemptCount;
   LIST_ENTRY    AttemptConfigs;      // User configured Attempt list.
-  UINT8         ProcessedAttemptCount;
-  LIST_ENTRY    ProcessedAttempts;   // Processed Attempt list.
-  CHAR8         InitiatorName[NVMEOF_NAME_MAX_SIZE];
-  UINTN         InitiatorNameLength;
 } NVMEOF_NIC_PRIVATE_DATA;
 extern NVMEOF_NIC_PRIVATE_DATA  *mNicPrivate;
 
@@ -279,7 +270,7 @@ typedef struct {
 typedef struct _NVMEOF_ATTEMPT_ENTRY {
   LIST_ENTRY                      Link;
   NVMEOF_ATTEMPT_CONFIG_NVDATA    Data;
-  struct spdk_edk_sock_ctx        SocketContext;
+  BOOLEAN                         Processed;   // NvmeOfStart has handled this attempt
 } NVMEOF_ATTEMPT_ENTRY;
 
 #define MAX_SUBSYSTEMS_SUPPORTED  8
@@ -295,6 +286,8 @@ extern UINT8           NqnNidMapINdex;
 
 typedef struct _NVMEOF_NBFT {
   UINT8                            PrimaryHfiIndex;
+  // This subsystem's DHCP root path, or NULL. The NBFT carries one per SSNS Extended Info descriptor.
+  CHAR8                            *RootPath;
   UINT8                            PrimaryDiscoveryCtlrIndex;
   BOOLEAN                          IsDiscoveryNqn;
   NVMEOF_DEVICE_PRIVATE_DATA       *Device;

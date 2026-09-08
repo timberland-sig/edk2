@@ -435,30 +435,16 @@ NvmeOfConfigUpdateAttemptInfoList (
   Status      = EFI_SUCCESS;
   AttemptInfo = NULL;
 
-  AttemptConfigData = NvmeOfGetVariableAndSize (
-                        L"Nvmeof_Attemptconfig",
-                        &gNvmeOfConfigGuid,
-                        &Size
-                        );
+  AttemptConfigData = NvmeOfGetVariableAndSize (L"Nvmeof_Attemptconfig", &gNvmeOfConfigGuid, &Size);
   if (Size % sizeof (NVMEOF_ATTEMPT_CONFIG_NVDATA) != 0) {
     Status = EFI_UNSUPPORTED;
-    DEBUG ((
-      DEBUG_ERROR,
-      "%a: Located variable (Nvmeof_Attemptconfig) with Guid (%d) "
-      "has unexpected data size.\n",
-      __FUNCTION__,
-      &gNvmeOfConfigGuid
-      ));
+    DEBUG ((DEBUG_ERROR, "Located variable (Nvmeof_Attemptconfig) with Guid (%d) " "has unexpected data size.\n", &gNvmeOfConfigGuid));
     goto Exit;
   }
 
   AttemptCount = Size / sizeof (NVMEOF_ATTEMPT_CONFIG_NVDATA);
   if (AttemptCount > NVMEOF_MAX_ATTEMPTS_NUM) {
-    DEBUG ((
-      DEBUG_WARN,
-      "%a: NV variable (Nvmeof_Attemptconfig) exceeds supported attempt count.\n",
-      __FUNCTION__
-      ));
+    DEBUG ((DEBUG_WARN, "NV variable (Nvmeof_Attemptconfig) exceeds supported attempt count.\n"));
   }
 
   for (Index = 0; Index < NVMEOF_MAX_ATTEMPTS_NUM; Index++) {
@@ -470,7 +456,6 @@ NvmeOfConfigUpdateAttemptInfoList (
       if (AttemptInfo->AttemptIndex == Index) {
         break;
       }
-
       AttemptInfo = NULL;
     }
 
@@ -494,11 +479,7 @@ NvmeOfConfigUpdateAttemptInfoList (
     if ((Index < AttemptCount) &&
         !IsZeroBuffer (&AttemptConfigData[Index], sizeof (NVMEOF_ATTEMPT_CONFIG_NVDATA)))
     {
-      CopyMem (
-        &AttemptInfo->Data,
-        &AttemptConfigData[Index],
-        sizeof (NVMEOF_ATTEMPT_CONFIG_NVDATA)
-        );
+      CopyMem (&AttemptInfo->Data, &AttemptConfigData[Index], sizeof (NVMEOF_ATTEMPT_CONFIG_NVDATA));
     } else {
       NewAttempt                 = &AttemptInfo->Data;
       NewAttempt->NvmeofAuthType = NVMEOF_AUTH_TYPE_NONE;
@@ -514,18 +495,7 @@ NvmeOfConfigUpdateAttemptInfoList (
     // Set the attempt name according to the order.
     //
     AttemptInfo->AttemptIndex = Index;
-    UnicodeSPrint (
-      mNicPrivate->PortString,
-      (UINTN)NVMEOF_NAME_IFR_MAX_SIZE,
-      L"Attempt %d",
-      (UINTN)AttemptInfo->AttemptIndex + 1
-      );
-
-    UnicodeStrToAsciiStrS (
-      mNicPrivate->PortString,
-      AttemptInfo->Data.AttemptName,
-      ATTEMPT_NAME_SIZE
-      );
+    AsciiSPrint (AttemptInfo->Data.AttemptName, NVMEOF_ATTEMPT_NAME_SIZE, "Attempt %d", (UINTN)AttemptInfo->AttemptIndex + 1);
   }
 
 Exit:
@@ -663,6 +633,7 @@ NvmeOfConfigUpdateDisplayedAttempts (
   LIST_ENTRY                    *NicEntry;
   CHAR16                        MacString[NVMEOF_MAX_MAC_STRING_LEN];
   CHAR16                        MacString2[NVMEOF_MAX_MAC_STRING_LEN];
+  CHAR16                        AttemptStr[NVMEOF_NAME_IFR_MAX_SIZE];
 
   Status = NvmeOfCreateOpCode (
              ATTEMPT_ENTRY_LABEL,
@@ -679,20 +650,15 @@ NvmeOfConfigUpdateDisplayedAttempts (
     AttemptInfo = NET_LIST_USER_STRUCT (AttemptEntry, NVMEOF_CONFIG_ATTEMPT_INFO, Link);
     Attempt     = &AttemptInfo->Data;
 
-    UnicodeSPrint (
-      mNicPrivate->PortString,
-      (UINTN)NVMEOF_NAME_IFR_MAX_SIZE,
-      L"%a",
-      Attempt->AttemptName
-      );
+    UnicodeSPrint (AttemptStr, (UINTN)NVMEOF_NAME_IFR_MAX_SIZE, L"%a", Attempt->AttemptName);
     AttemptTitleToken = HiiSetString (
                           mCallbackInfo->RegisteredHandle,
                           0,
-                          mNicPrivate->PortString,
+                          AttemptStr,
                           NULL
                           );
     if (AttemptTitleToken == 0) {
-      return;
+      goto Exit;
     }
 
     if (Attempt->SubsysConfigData.Enabled == NVMEOF_ATTEMPT_ENABLED) {
@@ -703,17 +669,8 @@ NvmeOfConfigUpdateDisplayedAttempts (
       NET_LIST_FOR_EACH (NicEntry, &mConfigPrivate->NicInfoList) {
         NicInfo = NET_LIST_USER_STRUCT (NicEntry, NVMEOF_CONFIG_NIC_INFO, Link);
 
-        NvmeOfMacAddrToStr (
-          &NicInfo->PermanentAddress,
-          NicInfo->HwAddressSize,
-          NicInfo->VlanId,
-          MacString
-          );
-        AsciiStrToUnicodeStrS (
-          Attempt->MacString,
-          MacString2,
-          NVMEOF_MAX_MAC_STRING_LEN
-          );
+        NvmeOfMacAddrToStr (&NicInfo->PermanentAddress, NicInfo->HwAddressSize, NicInfo->VlanId, MacString);
+        AsciiStrToUnicodeStrS (Attempt->MacString, MacString2, NVMEOF_MAX_MAC_STRING_LEN);
 
         if (!StrCmp (MacString, MacString2)) {
           DevicePath = ConvertDevicePathToText (
@@ -725,38 +682,24 @@ NvmeOfConfigUpdateDisplayedAttempts (
         }
       }
       if (DevicePath == NULL) {
-        UnicodeSPrint (
-          mNicPrivate->PortString,
-          (UINTN)NVMEOF_NAME_IFR_MAX_SIZE,
-          L"Device not found or configuration pending for MAC : %a",
-          Attempt->MacString
-          );
+        UnicodeSPrint (AttemptStr, (UINTN)NVMEOF_NAME_IFR_MAX_SIZE, L"Device not found or configuration pending for MAC : %a", Attempt->MacString);
       } else {
-        UnicodeSPrint (
-          mNicPrivate->PortString,
-          (UINTN)NVMEOF_NAME_IFR_MAX_SIZE,
-          L"Device Path : %s",
-          DevicePath
-          );
+        UnicodeSPrint (AttemptStr, (UINTN)NVMEOF_NAME_IFR_MAX_SIZE, L"Device Path : %s", DevicePath);
         FreePool (DevicePath);
       }
     } else {
-      UnicodeSPrint (
-        mNicPrivate->PortString,
-        (UINTN)NVMEOF_NAME_IFR_MAX_SIZE,
-        L"Attempt is not enabled."
-        );
+      UnicodeSPrint ( AttemptStr, (UINTN)NVMEOF_NAME_IFR_MAX_SIZE, L"Attempt is not enabled.");
     }
 
     AttemptTitleHelpToken = HiiSetString (
                               mCallbackInfo->RegisteredHandle,
                               0,
-                              mNicPrivate->PortString,
+                              AttemptStr,
                               NULL
                               );
 
     if (AttemptTitleHelpToken == 0) {
-      return;
+      goto Exit;
     }
 
     HiiCreateGotoOpCode (
@@ -777,6 +720,7 @@ NvmeOfConfigUpdateDisplayedAttempts (
     EndOpCodeHandle                                 // Replace data
     );
 
+Exit:
   HiiFreeOpCodeHandle (StartOpCodeHandle);
   HiiFreeOpCodeHandle (EndOpCodeHandle);
 }
@@ -1272,6 +1216,7 @@ NvmeOfConfigSelectMac (
   CHAR16                  *DevicePath;
   LIST_ENTRY              *Entry;
   NVMEOF_CONFIG_NIC_INFO  *NicInfo;
+  CHAR16                  PortStr[NVMEOF_NAME_IFR_MAX_SIZE];
 
   Status = NvmeOfCreateOpCode (
              MAC_ENTRY_LABEL,
@@ -1293,22 +1238,12 @@ NvmeOfConfigSelectMac (
   NET_LIST_FOR_EACH (Entry, &mConfigPrivate->NicInfoList) {
     NicInfo = NET_LIST_USER_STRUCT (Entry, NVMEOF_CONFIG_NIC_INFO, Link);
 
-    NvmeOfMacAddrToStr (
-      &NicInfo->PermanentAddress,
-      NicInfo->HwAddressSize,
-      NicInfo->VlanId,
-      MacString
-      );
-    UnicodeSPrint (
-      mNicPrivate->PortString,
-      (UINTN)NVMEOF_NAME_IFR_MAX_SIZE,
-      L"MAC %s",
-      MacString
-      );
+    NvmeOfMacAddrToStr (&NicInfo->PermanentAddress, NicInfo->HwAddressSize, NicInfo->VlanId, MacString);
+    UnicodeSPrint (PortStr, (UINTN)NVMEOF_NAME_IFR_MAX_SIZE, L"MAC %s", MacString);
     PortTitleToken = HiiSetString (
                        mCallbackInfo->RegisteredHandle,
                        0,
-                       mNicPrivate->PortString,
+                       PortStr,
                        NULL
                        );
     if (PortTitleToken == 0) {
@@ -1321,15 +1256,14 @@ NvmeOfConfigSelectMac (
                    FALSE,                             // DisplayOnly
                    FALSE                              // AllowShortcuts
                    );
-    UnicodeSPrint (
-      mNicPrivate->PortString,
-      (UINTN)NVMEOF_NAME_IFR_MAX_SIZE,
-      L"Device Path : %s",
-      DevicePath
-      );
-    FreePool (DevicePath);
+    if (DevicePath == NULL) {
+      UnicodeSPrint (PortStr, (UINTN)NVMEOF_NAME_IFR_MAX_SIZE, L"Device path unavailable");
+    } else {
+      UnicodeSPrint (PortStr, (UINTN)NVMEOF_NAME_IFR_MAX_SIZE, L"Device Path : %s", DevicePath);
+      FreePool (DevicePath);
+    }
 
-    PortTitleHelpToken = HiiSetString (mCallbackInfo->RegisteredHandle, 0, mNicPrivate->PortString, NULL);
+    PortTitleHelpToken = HiiSetString (mCallbackInfo->RegisteredHandle, 0, PortStr, NULL);
     if (PortTitleHelpToken == 0) {
       Status = EFI_INVALID_PARAMETER;
       goto Exit;

@@ -14,15 +14,23 @@
 #include "nvme_internal.h"
 #include "spdk/string.h"
 
-BOOLEAN                     gNbftInstalled = FALSE;
-UINTN                       gTableKey;
-NVMEOF_NBFT_HEAP            gNbftHeap;
-LIST_ENTRY                  gAddedAdaptersList;
-NVMEOF_PROCESSED_NAMESPACE  gProcessedNamespaceList;
-NVMEOF_PROCESSED_IP_ADDR    gProcessedIpConfigList;
-NVMEOF_GLOBAL_DATA          *NvmeOfData;
 extern EFI_HANDLE           mImageHandle;
 extern CHAR8                *gNvmeOfImagePath;
+
+//
+// State that outlives one publish. gTableKey is how NvmeOfPublishNbft() finds the table it installed last
+// time, so a Start after a Stop replaces that table instead of installing a second one beside it.
+//
+STATIC BOOLEAN  gNbftInstalled = FALSE;
+STATIC UINTN    gTableKey;
+
+//
+// Scratch for one publish. NvmeOfPublishNbft() initialises all four on entry and drains them before it returns.
+//
+STATIC NVMEOF_NBFT_HEAP            gNbftHeap;
+STATIC LIST_ENTRY                  gAddedAdaptersList;
+STATIC NVMEOF_PROCESSED_NAMESPACE  gProcessedNamespaceList;
+STATIC NVMEOF_PROCESSED_IP_ADDR    gProcessedIpConfigList;
 
 /**
   Add one item into the heap.
@@ -299,6 +307,7 @@ NvmeOfFillHostSection (
 {
   EFI_ACPI_NVMEOF_BFT_CONTROL_STRUCTURE  *Control;
   EFI_ACPI_NVMEOF_BFT_HOST_DESCRIPTOR    *Host;
+  NVMEOF_GLOBAL_DATA                     *NvmeOfData;
   UINTN                                  NvmeOfDataSize = 0;
   UINT16                                 Length;
 
@@ -325,6 +334,10 @@ NvmeOfFillHostSection (
                  );
   if ((NvmeOfData == NULL) || (NvmeOfDataSize == 0)) {
     DEBUG ((DEBUG_ERROR, "NvmeOfData Read Failed\n"));
+    if (NvmeOfData != NULL) {
+      FreePool (NvmeOfData);
+    }
+
     return;
   }
 
@@ -337,6 +350,8 @@ NvmeOfFillHostSection (
   Length = (UINT16)AsciiStrLen (NvmeOfData->NvmeofHostNqn);
   NvmeOfAddHeapItem (Heap, NvmeOfData->NvmeofHostNqn, Length);
   Host->HostNqnLen = Length;
+
+  FreePool (NvmeOfData);
 }
 
 /**
@@ -665,9 +680,14 @@ NvmeOfFillSubsystemNamespaceSection (
       SubsystemNamespace->Flags |= EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_FLAG_DISCOVERED_NAMESPACE;
     }
 
-    // Root Path in heap
-    if ((gNvmeOfRootPath != NULL) && (gNvmeOfRootPath[0] != '\0')) {
-      SsnsExtInfo.DhcpRootPathLength = (AsciiStrLen (gNvmeOfRootPath) - 1);
+    //
+    // Root Path in heap. BIT3 tells the OS this descriptor was populated from the DHCP Root-Path on this
+    // interface, so it belongs with the path itself: writing the string without the flag leaves the OS to
+    // guess where it came from.
+    //
+    if ((gNvmeOfNbftList[Index].RootPath != NULL) && (gNvmeOfNbftList[Index].RootPath[0] != '\0')) {
+      SsnsExtInfo.DhcpRootPathLength = (UINT16)AsciiStrLen (gNvmeOfNbftList[Index].RootPath);
+      SubsystemNamespace->Flags     |= EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_FLAG_DHCP_ROOTPATH;
     } else {
       SsnsExtInfo.DhcpRootPathLength = 0;
     }
@@ -709,7 +729,7 @@ NvmeOfFillSubsystemNamespaceSection (
       // Copy SsnsExtInfo  to heap and update the SubSystem Namespace header structure
       NvmeOfAddHeapItem (Heap, &SsnsExtInfo, sizeof (EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_EXT_INFO_DESCRIPTOR));
       if (SsnsExtInfo.DhcpRootPathLength > 0) {
-        NvmeOfAddHeapItem (Heap, gNvmeOfRootPath, SsnsExtInfo.DhcpRootPathLength);
+        NvmeOfAddHeapItem (Heap, gNvmeOfNbftList[Index].RootPath, SsnsExtInfo.DhcpRootPathLength);
       }
 
       // Advance the subsystem namespace section
@@ -718,6 +738,13 @@ NvmeOfFillSubsystemNamespaceSection (
       DeviceIndex++;
       continue;
     }
+
+    //
+    // Bits 08:07 of Flags are one three-valued field, not two flags: 00b Not Indicated, 01b Available,
+    // 10b Unavailable. The branch above sets Unavailable. Leaving this path at 00b would tell the OS we
+    // have no information about a subsystem we just connected to.
+    //
+    SubsystemNamespace->Flags |= EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_DESCRIPTOR_FLAG_UNAVAILABLE_NAMESPACE_0;
 
     // Logic to skip already processed namespace by comparing NID
     AlreadyProcessed = FALSE;
@@ -804,7 +831,7 @@ NvmeOfFillSubsystemNamespaceSection (
     // Copy SsnsExtInfo  to heap and update the SubSystem Namespace header structure
     NvmeOfAddHeapItem (Heap, &SsnsExtInfo, sizeof (EFI_ACPI_NVMEOF_BFT_SUBSYSTEM_EXT_INFO_DESCRIPTOR));
     if (SsnsExtInfo.DhcpRootPathLength > 0) {
-      NvmeOfAddHeapItem (Heap, gNvmeOfRootPath, SsnsExtInfo.DhcpRootPathLength);
+      NvmeOfAddHeapItem (Heap, gNvmeOfNbftList[Index].RootPath, SsnsExtInfo.DhcpRootPathLength);
     }
 
     // Add an entry to processed namespace list
@@ -1120,12 +1147,6 @@ Error:
       FreePool (ProcessedIpConfig);
     }
   }
-  // Free the allocated resources for NBFT
-  if (gNvmeOfRootPath != NULL) {
-    FreePool (gNvmeOfRootPath);
-    gNvmeOfRootPath = NULL;
-  }
-
   if (gNbftHeap.Heap != NULL) {
     FreePool (gNbftHeap.Heap);
   }

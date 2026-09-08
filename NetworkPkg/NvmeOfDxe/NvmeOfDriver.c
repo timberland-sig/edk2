@@ -34,7 +34,7 @@ NVMEOF_PRIVATE_PROTOCOL         NVMEOF_Identifier;
 NVMEOF_NIC_PRIVATE_DATA         *mNicPrivate = NULL;
 LIST_ENTRY                      gNvmeOfControllerList;
 extern NVMEOF_CLI_CTRL_MAPPING  *gCliCtrlMap;
-extern NVMEOF_CLI_CTRL_MAPPING  *CtrlrInfo;
+extern NVMEOF_CLI_CTRL_MAPPING  *gDriverCtrlMap;
 CHAR8                           *gNvmeOfRootPath    = NULL;
 BOOLEAN                         gAttemtsAlreadyRead = FALSE;
 CHAR8                           *gNvmeOfImagePath   = NULL;
@@ -90,7 +90,9 @@ NvmeOfInstallDeviceProtocols (
   NVMEOF_DRIVER_DATA  *Private;
   EFI_GUID            *ProtocolGuid;
 
-  if (!mNicPrivate->Ipv6Flag) {
+  Private = Device->Controller;
+
+  if (Private->IpVersion == IP_VERSION_4) {
     ProtocolGuid = &gEfiTcp4ProtocolGuid;
   } else {
     ProtocolGuid = &gEfiTcp6ProtocolGuid;
@@ -98,7 +100,6 @@ NvmeOfInstallDeviceProtocols (
 
   // Make sure the handle is NULL so we create a new handle
   Device->DeviceHandle = NULL;
-  Private              = Device->Controller;
 
   Status = gBS->InstallMultipleProtocolInterfaces (
                   &Device->DeviceHandle,
@@ -518,17 +519,19 @@ ProcessAsyncTaskList (
   @param[in]  IpVersion            IP_VERSION_4 or IP_VERSION_6.
   @param[in]  AttemptConfigData    Attempt config data
   @param[in]  AttemptMacString[]   Attempt mac string
-  @param[out] SkipAttempt          skip attempt
+
+  @retval TRUE   An already processed attempt has the same MAC, target IP, port and NQN.
+  @retval FALSE  This attempt has not been processed yet.
 
 **/
-VOID
+STATIC
+BOOLEAN
 NvmeOfCheckIfSkipAttempt (
   IN  EFI_HANDLE                    Image,
   IN  EFI_HANDLE                    ControllerHandle,
   IN  UINT8                         IpVersion,
   IN  NVMEOF_ATTEMPT_CONFIG_NVDATA  *AttemptConfigData,
-  IN  CHAR16                        AttemptMacString[],
-  OUT BOOLEAN                       *SkipAttempt
+  IN  CHAR16                        AttemptMacString[]
   )
 {
   BOOLEAN                       CheckForOtherFields                           = FALSE;
@@ -540,17 +543,17 @@ NvmeOfCheckIfSkipAttempt (
   NVMEOF_ATTEMPT_ENTRY          *AttemptEntry;
   NVMEOF_ATTEMPT_CONFIG_NVDATA  *ProcessedAttempt = NULL;
 
-  NET_LIST_FOR_EACH_SAFE (EntryProcessed, NextEntryProcessed, &mNicPrivate->ProcessedAttempts) {
+  NET_LIST_FOR_EACH_SAFE (EntryProcessed, NextEntryProcessed, &mNicPrivate->AttemptConfigs) {
     BOOLEAN  IsIpSame = FALSE;
 
-    AttemptEntry     = NET_LIST_USER_STRUCT (EntryProcessed, NVMEOF_ATTEMPT_ENTRY, Link);
+    AttemptEntry = NET_LIST_USER_STRUCT (EntryProcessed, NVMEOF_ATTEMPT_ENTRY, Link);
+    if (!AttemptEntry->Processed) {
+      continue;
+    }
+
     ProcessedAttempt = &AttemptEntry->Data;
 
-    AsciiStrToUnicodeStrS (
-      ProcessedAttempt->MacString,
-      ProcessedMacString,
-      sizeof (ProcessedMacString) / sizeof (ProcessedMacString[0])
-      );
+    AsciiStrToUnicodeStrS (ProcessedAttempt->MacString, ProcessedMacString, sizeof (ProcessedMacString) / sizeof (ProcessedMacString[0]));
 
     if (IpVersion == IP_VERSION_4) {
       IsIpSame = EFI_IP4_EQUAL (&AttemptConfigData->SubsysConfigData.NvmeofSubSystemIp, &ProcessedAttempt->SubsysConfigData.NvmeofSubSystemIp);
@@ -589,11 +592,11 @@ NvmeOfCheckIfSkipAttempt (
           (AttemptConfigData->SubsysConfigData.NvmeofSubsysPortId == ProcessedAttempt->SubsysConfigData.NvmeofSubsysPortId) &&
           (AsciiStrCmp (AttemptConfigData->SubsysConfigData.NvmeofSubsysNqn, ProcessedAttempt->SubsysConfigData.NvmeofSubsysNqn) == 0))
       {
-        *SkipAttempt = TRUE;
-        break;
+        return TRUE;
       }
     }
   }
+  return FALSE;
 }
 
 /**
@@ -620,12 +623,10 @@ NvmeOfGetGuid (
     *NvmeOfServiceBindingGuid = &gNvmeOfV4PrivateGuid;
     *TcpServiceBindingGuid    = &gEfiTcp4ServiceBindingProtocolGuid;
     *ProtocolGuid             = &gEfiTcp4ProtocolGuid;
-    mNicPrivate->Ipv6Flag     = FALSE;
   } else if (IpVersion == IP_VERSION_6) {
     *NvmeOfServiceBindingGuid = &gNvmeOfV6PrivateGuid;
     *TcpServiceBindingGuid    = &gEfiTcp6ServiceBindingProtocolGuid;
     *ProtocolGuid             = &gEfiTcp6ProtocolGuid;
-    mNicPrivate->Ipv6Flag     = TRUE;
   } else {
     DEBUG ((DEBUG_ERROR, "NvmeOFDriverBindingStart: Invalid IP version parmeter passed\n"));
     return EFI_INVALID_PARAMETER;
@@ -639,7 +640,9 @@ NvmeOfGetGuid (
 
   @param[in]  Image                Handle of the image.
   @param[in]  ControllerHandle     Handle of the controller.
-  @param[in]  AttemptConfigData
+  @param[in]  IpVersion            IP_VERSION_4 or IP_VERSION_6. Picks the v4 or v6
+                                   resolver.
+  @param[in]  AttemptConfigData    The attempt whose target name is resolved.
 
   @retval EFI_SUCCESS           This driver was started.
   @retval EFI_INVALID_PARAMETER Any input parameter is invalid.
@@ -650,6 +653,7 @@ EFI_STATUS
 NvmeOfDnsMode (
   IN EFI_HANDLE                    Image,
   IN EFI_HANDLE                    ControllerHandle,
+  IN UINT8                         IpVersion,
   IN NVMEOF_ATTEMPT_CONFIG_NVDATA  **AttemptConfigData
   )
 {
@@ -659,7 +663,7 @@ NvmeOfDnsMode (
     //
     // perform dns process if target address expressed by domain name.
     //
-    if (!mNicPrivate->Ipv6Flag) {
+    if (IpVersion == IP_VERSION_4) {
       Status = NvmeOfDns4 (Image, ControllerHandle, &(*AttemptConfigData)->SubsysConfigData);
     } else {
       Status = NvmeOfDns6 (Image, ControllerHandle, &(*AttemptConfigData)->SubsysConfigData);
@@ -841,12 +845,39 @@ NvmeofClearNbftData (
     if (gNvmeOfNbftList[Index].FailTridInfo != NULL) {
       FreePool (gNvmeOfNbftList[Index].FailTridInfo);
     }
+
+    if (gNvmeOfNbftList[Index].RootPath != NULL) {
+      FreePool (gNvmeOfNbftList[Index].RootPath);
+    }
   }
 
   if (gNvmeOfNbftListIndex > 0) {
     SetMem (gNvmeOfNbftList, (NID_MAX * sizeof (NVMEOF_NBFT)), 0);
     gNvmeOfNbftListIndex = 0;
   }
+}
+
+/**
+  Has any configured attempt been handled by NvmeOfStart() yet?
+
+  NvmeOfStart() runs once per IP version, so this spans both passes: it answers whether the
+  driver has anything to show for this boot, not whether the current pass did.
+**/
+STATIC
+BOOLEAN
+NvmeOfAnyAttemptProcessed (
+  VOID
+  )
+{
+  LIST_ENTRY  *Entry;
+
+  NET_LIST_FOR_EACH (Entry, &mNicPrivate->AttemptConfigs) {
+    if (NET_LIST_USER_STRUCT (Entry, NVMEOF_ATTEMPT_ENTRY, Link)->Processed) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
 }
 
 /**
@@ -880,26 +911,21 @@ NvmeOfStart (
   EFI_GUID                      *ProtocolGuid             = NULL;
   EFI_MAC_ADDRESS               MacAddrCon                = { 0 };
   UINTN                         HwAddressSize             = 0;
-  NVMEOF_ATTEMPT_ENTRY          *AttemptTmp               = NULL;
   NVMEOF_ATTEMPT_ENTRY          *AttemptEntry;
   NVMEOF_ATTEMPT_CONFIG_NVDATA  *AttemptConfigData                          = NULL;
   NVMEOF_NIC_INFO               *NicInfo                                    = NULL;
   CHAR16                        MacString[NVMEOF_MAX_MAC_STRING_LEN]        = { 0 };
   CHAR16                        AttemptMacString[NVMEOF_MAX_MAC_STRING_LEN] = { 0 };
-  BOOLEAN                       AttemptFound                                = FALSE;
-  BOOLEAN                       SkipAttempt                                 = FALSE;
+  UINTN                         AttemptCount                                = 0;
+  UINT8                         NbftEntriesBefore                           = 0;
   LIST_ENTRY                    *Entry                                      = NULL;
   LIST_ENTRY                    *NextEntry                                  = NULL;
   NVMEOF_DRIVER_DATA            *Private                                    = NULL;
+  UINT8                         ExpectedIpMode                              = (IpVersion == IP_VERSION_6) ? IP_MODE_IP6 : IP_MODE_IP4;
   CHAR16                        AttemptNqn[NVMEOF_NAME_MAX_SIZE]            = { 0 };
   VOID                          *Interface                                  = NULL;
 
-  Status = NvmeOfGetGuid (
-             IpVersion,
-             &NvmeOfServiceBindingGuid,
-             &ProtocolGuid,
-             &TcpServiceBindingGuid
-             );
+  Status = NvmeOfGetGuid (IpVersion, &NvmeOfServiceBindingGuid, &ProtocolGuid, &TcpServiceBindingGuid);
   if (EFI_ERROR (Status)) {
     return EFI_INVALID_PARAMETER;
   }
@@ -930,7 +956,7 @@ NvmeOfStart (
   //
   // Record the incoming NIC info.
   //
-  Status = NvmeOfSaveNic (ControllerHandle, Image);
+  Status = NvmeOfSaveNic (ControllerHandle, Image, &NicInfo);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "NvmeOFDriverBindingStart: error saving NIC info\n"));
     return Status;
@@ -944,22 +970,14 @@ NvmeOfStart (
     return FALSE;
   }
 
-  DEBUG ((
-    DEBUG_INFO,
-    "Processing NIC adapter with mac %02x:%02x:%02x:%02x:%02x:%02x\n",
-    MacAddrCon.Addr[0],
-    MacAddrCon.Addr[1],
-    MacAddrCon.Addr[2],
-    MacAddrCon.Addr[3],
-    MacAddrCon.Addr[4],
-    MacAddrCon.Addr[5]
-    ));
+  DEBUG ((DEBUG_INFO, "Processing NIC adapter with mac %02x:%02x:%02x:%02x:%02x:%02x\n",
+      MacAddrCon.Addr[0], MacAddrCon.Addr[1], MacAddrCon.Addr[2], MacAddrCon.Addr[3], MacAddrCon.Addr[4], MacAddrCon.Addr[5]));
 
-  UINTN  AttemptCount = 0;
 
-  NET_LIST_FOR_EACH_SAFE (Entry, NextEntry, &mNicPrivate->AttemptConfigs) {
-    SkipAttempt       = FALSE;
-    AttemptFound      = FALSE;
+  NbftEntriesBefore = gNvmeOfNbftListIndex;
+
+  NET_LIST_FOR_EACH_SAFE (Entry, NextEntry, &mNicPrivate->AttemptConfigs)
+  {
     AttemptEntry      = NET_LIST_USER_STRUCT (Entry, NVMEOF_ATTEMPT_ENTRY, Link);
     AttemptConfigData = &AttemptEntry->Data;
 
@@ -968,9 +986,6 @@ NvmeOfStart (
       continue;
     }
 
-    // Get the Nic information from the NIC list
-    NicInfo = NvmeOfGetNicInfoByIndex (mNicPrivate->CurrentNic);
-    ASSERT (NicInfo != NULL);
     NvmeOfMacAddrToStr (
       &NicInfo->PermanentAddress,
       NicInfo->HwAddressSize,
@@ -978,22 +993,15 @@ NvmeOfStart (
       MacString
       );
 
-    AsciiStrToUnicodeStrS (
-      AttemptConfigData->MacString,
-      AttemptMacString,
-      sizeof (AttemptMacString) / sizeof (AttemptMacString[0])
-      );
+    AsciiStrToUnicodeStrS (AttemptConfigData->MacString, AttemptMacString, sizeof (AttemptMacString) / sizeof (AttemptMacString[0]));
     if (StrCmp (MacString, AttemptMacString) != 0) {
       continue;
-    } else {
-      if (((mNicPrivate->Ipv6Flag == TRUE) && (AttemptConfigData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP6)) ||
-          ((mNicPrivate->Ipv6Flag == FALSE) && (AttemptConfigData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP4)) ||
-          (AttemptConfigData->SubsysConfigData.NvmeofIpMode == IP_MODE_AUTOCONFIG))
-      {
-        AttemptFound = TRUE;
-      } else {
-        continue;
-      }
+    } 
+
+    // Skip attempts with different IP mode.
+    if ((AttemptConfigData->SubsysConfigData.NvmeofIpMode != ExpectedIpMode) &&
+        (AttemptConfigData->SubsysConfigData.NvmeofIpMode != IP_MODE_AUTOCONFIG)) {
+      continue;
     }
 
     // Add the NIC Index to the attempt.
@@ -1001,15 +1009,7 @@ NvmeOfStart (
 
     // Check if the Mac and TargetIP and TargetPort of attempt matches the already processed attempts
     // If yes, hence skip it.
-    NvmeOfCheckIfSkipAttempt (
-      Image,
-      ControllerHandle,
-      IpVersion,
-      AttemptConfigData,
-      AttemptMacString,
-      &SkipAttempt
-      );
-    if (SkipAttempt) {
+    if (NvmeOfCheckIfSkipAttempt (Image, ControllerHandle, IpVersion, AttemptConfigData, AttemptMacString)) {
       continue;
     }
 
@@ -1017,7 +1017,7 @@ NvmeOfStart (
     // Create the instance private data.
     //
     if (Private == NULL) {
-      Private = NvmeOfCreateDriverData (Image, ControllerHandle);
+      Private = NvmeOfCreateDriverData (Image, ControllerHandle, IpVersion);
       if (Private == NULL) {
         DEBUG ((DEBUG_ERROR, "Error allocating driver private structure .\n"));
         goto ON_ERROR;
@@ -1079,68 +1079,54 @@ NvmeOfStart (
     }
 
     // Get the attempt config data based on configuration
-    Status = NvmeOfGetConfigData (Image, ControllerHandle, AttemptConfigData);
+    Status = NvmeOfGetConfigData (Image, ControllerHandle, IpVersion, AttemptConfigData);
     if (EFI_ERROR (Status)) {
       DEBUG ((DEBUG_ERROR, "Error getting config data.\n"));
       goto ON_ERROR;
     }
 
-    Status = NvmeOfDnsMode (Image, ControllerHandle, &AttemptConfigData);
+    Status = NvmeOfDnsMode (Image, ControllerHandle, IpVersion, &AttemptConfigData);
     if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_ERROR, "The configuration of Target address or DNS server \
-          address is invalid!\n"));
+      DEBUG ((DEBUG_ERROR, "The configuration of Target address or DNS server address is invalid!\n"));
       goto ON_ERROR;
     }
 
-    if (AttemptFound) {
-      Private->Attempt = AttemptEntry;
-      AsciiStrToUnicodeStrS (
-        AttemptConfigData->SubsysConfigData.NvmeofSubsysNqn,
-        AttemptNqn,
-        sizeof (AttemptNqn) / sizeof (AttemptNqn[0])
-        );
+    Private->Attempt = AttemptEntry;
+    AsciiStrToUnicodeStrS (AttemptConfigData->SubsysConfigData.NvmeofSubsysNqn, AttemptNqn, sizeof (AttemptNqn) / sizeof (AttemptNqn[0]));
 
-      if (!SkipAttempt) {
-        Status = NvmeOfProbeControllers (Private, AttemptConfigData, IpVersion);
-        NvmeOfPublishNbft (FALSE);
-        if (EFI_ERROR (Status)) {
-          continue;
-        } else {
-          // Get IPv6 info to populate in nBFT
-          if (mNicPrivate->Ipv6Flag) {
-            NvmeOfGetIp6NicInfo (&AttemptConfigData->SubsysConfigData, Private->TcpIo);
-          }
-        }
-      }
-
-      // Attempt processing completed, queue to processed attempts list.
-      AttemptTmp = AllocateZeroPool (sizeof (NVMEOF_ATTEMPT_ENTRY));
-      CopyMem (AttemptTmp, AttemptEntry, sizeof (NVMEOF_ATTEMPT_ENTRY));
-      InsertTailList (&mNicPrivate->ProcessedAttempts, &AttemptTmp->Link);
-
-      mNicPrivate->ProcessedAttemptCount++;
-      AttemptCount++;
+    Status = NvmeOfProbeControllers (Private, AttemptConfigData, IpVersion);
+    if (EFI_ERROR (Status)) {
       continue;
+    }
+
+    AttemptEntry->Processed = TRUE;
+
+    AttemptCount++;
+    continue;
 ON_ERROR:
-      // Destroy TCP Child Handle and Free the Private,
-      // when error occurs while opening protocol on TCP Child Handle and
-      // when error occurs while NvmeOfServiceBindingGuid protocol installation.
-      NvmeOfUninstallProtocolInterface (
-        Image,
-        ControllerHandle,
-        ProtocolGuid,
-        NvmeOfServiceBindingGuid,
-        Private
-        );
+    // Destroy TCP Child Handle and Free the Private,
+    // when error occurs while opening protocol on TCP Child Handle and
+    // when error occurs while NvmeOfServiceBindingGuid protocol installation.
+    NvmeOfUninstallProtocolInterface (
+      Image,
+      ControllerHandle,
+      ProtocolGuid,
+      NvmeOfServiceBindingGuid,
+      Private
+      );
 
-      if (Private != NULL) {
-        FreePool (Private);
-        Private = NULL;
-      }
+    if (Private != NULL) {
+      FreePool (Private);
+      Private = NULL;
+    }
 
-      continue;
-    }// End of Attempt matched
+    continue;
   }// End Of Attempt
+
+  // Publish once per Start, not once per attempt and only republish if this pass actually added something.
+  if (gNvmeOfNbftListIndex > NbftEntriesBefore) {
+    NvmeOfPublishNbft (FALSE);
+  }
 
   // Destroy TCP Child Handle and Free the Private, when Attempt == 0,
   // else other successful probe will share the private.
@@ -1159,12 +1145,11 @@ ON_ERROR:
     }
   }
 
-  if (mNicPrivate->ProcessedAttemptCount == 0) {
+  if (!NvmeOfAnyAttemptProcessed ()) {
     // Clear the Attempt Config List
     NET_LIST_FOR_EACH_SAFE (Entry, NextEntry, &mNicPrivate->AttemptConfigs) {
       AttemptEntry = NET_LIST_USER_STRUCT (Entry, NVMEOF_ATTEMPT_ENTRY, Link);
       RemoveEntryList (&AttemptEntry->Link);
-      mNicPrivate->AttemptCount--;
       FreePool (AttemptEntry);
     }
     gAttemtsAlreadyRead = FALSE;
@@ -1211,12 +1196,6 @@ UnregisterNvmeOfNamespace (
   EFI_GUID                               *ProtocolGuid;
   NVMEOF_DRIVER_DATA                     *Private;
 
-  if (!mNicPrivate->Ipv6Flag) {
-    ProtocolGuid = &gEfiTcp4ProtocolGuid;
-  } else {
-    ProtocolGuid = &gEfiTcp6ProtocolGuid;
-  }
-
   BlockIo = NULL;
 
   Status = gBS->OpenProtocol (
@@ -1237,6 +1216,12 @@ UnregisterNvmeOfNamespace (
   Device  = NVMEOF_DEVICE_PRIVATE_DATA_FROM_BLOCK_IO (BlockIo);
   Private = Device->Controller;
   ASSERT (Private != NULL);
+
+  if (Private->IpVersion == IP_VERSION_4) {
+    ProtocolGuid = &gEfiTcp4ProtocolGuid;
+  } else {
+    ProtocolGuid = &gEfiTcp6ProtocolGuid;
+  }
 
   //
   // Wait for the device's asynchronous I/O queue to become empty.
@@ -1380,12 +1365,10 @@ NvmeOfStop (
     ProtocolGuid          = &gNvmeOfV4PrivateGuid;
     TcpProtocolGuid       = &gEfiTcp4ProtocolGuid;
     TcpServiceBindingGuid = &gEfiTcp4ServiceBindingProtocolGuid;
-    mNicPrivate->Ipv6Flag = FALSE;
   } else if (IpVersion == IP_VERSION_6) {
     ProtocolGuid          = &gNvmeOfV6PrivateGuid;
     TcpProtocolGuid       = &gEfiTcp6ProtocolGuid;
     TcpServiceBindingGuid = &gEfiTcp6ServiceBindingProtocolGuid;
-    mNicPrivate->Ipv6Flag = TRUE;
   } else {
     return EFI_DEVICE_ERROR;
   }
@@ -1485,7 +1468,7 @@ NvmeOfStop (
   // Remove NIC to be done once only. Comes back for IPv6 binding, hence error ignored.
   NvmeOfRemoveNic (NvmeOfController);
 
-  NET_LIST_FOR_EACH_SAFE (Entry, NextEntryProcessed, &CtrlrInfo->CliCtrlrList) {
+  NET_LIST_FOR_EACH_SAFE (Entry, NextEntryProcessed, &gDriverCtrlMap->CliCtrlrList) {
     CtrlrInfoData =
       NET_LIST_USER_STRUCT (Entry, NVMEOF_CLI_CTRL_MAPPING, CliCtrlrList);
     RemoveEntryList (&CtrlrInfoData->CliCtrlrList);
@@ -1495,14 +1478,6 @@ NvmeOfStop (
   NET_LIST_FOR_EACH_SAFE (Entry, NextEntryProcessed, &mNicPrivate->AttemptConfigs) {
     AttemptEntry = NET_LIST_USER_STRUCT (Entry, NVMEOF_ATTEMPT_ENTRY, Link);
     RemoveEntryList (&AttemptEntry->Link);
-    mNicPrivate->AttemptCount--;
-    FreePool (AttemptEntry);
-  }
-
-  NET_LIST_FOR_EACH_SAFE (Entry, NextEntryProcessed, &mNicPrivate->ProcessedAttempts) {
-    AttemptEntry = NET_LIST_USER_STRUCT (Entry, NVMEOF_ATTEMPT_ENTRY, Link);
-    RemoveEntryList (&AttemptEntry->Link);
-    mNicPrivate->ProcessedAttemptCount--;
     FreePool (AttemptEntry);
   }
 
@@ -1975,9 +1950,9 @@ NvmeOfDriverUnload (
     gCliCtrlMap = NULL;
   }
 
-  if (CtrlrInfo != NULL) {
-    FreePool (CtrlrInfo);
-    CtrlrInfo = NULL;
+  if (gDriverCtrlMap != NULL) {
+    FreePool (gDriverCtrlMap);
+    gDriverCtrlMap = NULL;
   }
 
   if (gNvmeOfImagePath != NULL) {
@@ -2088,16 +2063,15 @@ NvmeOfDriverEntry (
     goto Error2;
   }
 
-  CtrlrInfo = AllocateZeroPool (sizeof (NVMEOF_CLI_CTRL_MAPPING));
-  if (CtrlrInfo == NULL) {
+  gDriverCtrlMap = AllocateZeroPool (sizeof (NVMEOF_CLI_CTRL_MAPPING));
+  if (gDriverCtrlMap == NULL) {
     goto Error2;
   }
 
   InitializeListHead (&mNicPrivate->NicInfoList);
   InitializeListHead (&mNicPrivate->AttemptConfigs);
-  InitializeListHead (&mNicPrivate->ProcessedAttempts);
   InitializeListHead (&gCliCtrlMap->CliCtrlrList);
-  InitializeListHead (&CtrlrInfo->CliCtrlrList);
+  InitializeListHead (&gDriverCtrlMap->CliCtrlrList);
   InitializeListHead (&fail_conn);
 
   //
@@ -2137,8 +2111,8 @@ Error2:
     FreePool (gCliCtrlMap);
   }
 
-  if (CtrlrInfo != NULL) {
-    FreePool (CtrlrInfo);
+  if (gDriverCtrlMap != NULL) {
+    FreePool (gDriverCtrlMap);
   }
 
 Error1:
