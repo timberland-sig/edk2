@@ -335,7 +335,7 @@ Io2Complete (
   * caller is aware that an error occurred.
   */
   if (spdk_nvme_cpl_is_error (completion)) {
-    DEBUG ((DEBUG_ERROR, "\n I/O error status: %s\n", spdk_nvme_cpl_get_status_string (&completion->status)));
+    DEBUG ((DEBUG_ERROR, "\n I/O error status: %a\n", spdk_nvme_cpl_get_status_string (&completion->status)));
     Subtask->NvmeOfAsyncData->IsCompleted = ERROR_IN_COMPLETION;
     return;
   }

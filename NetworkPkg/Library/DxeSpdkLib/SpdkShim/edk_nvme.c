@@ -21,7 +21,7 @@ edk_nvme_ctrlr_probe (
   struct edk_spdk_nvme_ctrlr_opts  edk_opts;
 
   assert (trid != NULL);
-  DEBUG ((DEBUG_INFO, "Probe trid: %s\n", trid->traddr));
+  DEBUG ((DEBUG_INFO, "Probe trid: %a\n", trid->traddr));
   spdk_nvme_ctrlr_get_default_ctrlr_opts (&opts, sizeof (opts));
   edk_opts.base     = &opts;
   ZeroMem (&edk_opts.sock_ctx, sizeof (edk_opts.sock_ctx));
