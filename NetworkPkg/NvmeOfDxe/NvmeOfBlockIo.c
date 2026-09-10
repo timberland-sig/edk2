@@ -332,7 +332,7 @@ IoComplete (
   * caller is aware that an error occurred.
   */
   if (spdk_nvme_cpl_is_error (completion)) {
-    DEBUG ((DEBUG_ERROR, "\n IoComplete: I/O error status: %s\n", spdk_nvme_cpl_get_status_string (&completion->status)));
+    DEBUG ((DEBUG_ERROR, "\n IoComplete: I/O error status: %a\n", spdk_nvme_cpl_get_status_string (&completion->status)));
     *IsCompleted = ERROR_IN_COMPLETION;
     return;
   }
