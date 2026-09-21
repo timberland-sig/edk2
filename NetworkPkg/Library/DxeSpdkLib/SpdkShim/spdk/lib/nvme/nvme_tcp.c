@@ -23,6 +23,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #define NVME_TCP_HPDA_DEFAULT           0
 #define NVME_TCP_MAX_R2T_DEFAULT        1
 #define NVME_TCP_PDU_H2C_MIN_DATA_SIZE  4096
+#define NVME_TCP_MAX_XFER_SIZE          (4 * 1024 * 1024)
 
 /*
  * Maximum value of transport_ack_timeout used by TCP controller
@@ -2407,8 +2408,11 @@ nvme_tcp_ctrlr_get_max_xfer_size (
   struct spdk_nvme_ctrlr  *ctrlr
   )
 {
-  /* TCP transport doesn't limit maximum IO transfer size. */
-  return UINT32_MAX;
+  //
+  // Linux NVMe/TCP targets reject transport SGLs larger than 4 MiB.  Expose
+  // the same limit so the common namespace code splits larger requests.
+  //
+  return NVME_TCP_MAX_XFER_SIZE;
 }
 
 static uint16_t
