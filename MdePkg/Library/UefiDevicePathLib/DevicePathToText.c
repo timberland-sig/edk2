@@ -1682,7 +1682,7 @@ DevPathToTextNvmeOf (
   UefiDevicePathLibCatPrint (
     Str,
     L"%g)",
-    Guid
+    &Guid
     );
 }
 

@@ -258,7 +258,7 @@ typedef struct __va_list {
 #define VA_END(Marker)               (Marker = (VA_LIST) 0)
 #endif
 
-#define va_copy(dest, src)  memcpy(dest, src, sizeof(va_list))
+#define va_copy(dest, src)  VA_COPY(dest, src)
 
 #define va_list   VA_LIST
 #define va_arg    VA_ARG

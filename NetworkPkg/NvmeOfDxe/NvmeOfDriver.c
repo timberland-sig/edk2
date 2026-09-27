@@ -836,10 +836,11 @@ NvmeofClearNbftData (
   // Clear list of failed connection trid info for discovered subsystems
   NET_LIST_FOR_EACH_SAFE (Entry, NextEntry, &fail_conn) {
     FailTridInfo = NET_LIST_USER_STRUCT (Entry, struct spdk_nvme_fail_trid, link);
-    if (FailTridInfo != NULL) {
-      FreePool (FailTridInfo);
-    }
+    RemoveEntryList (Entry);
+    FreePool (FailTridInfo);
   }
+
+  InitializeListHead (&fail_conn);
   // Clear failed connection trid info for discovery or IO subsystems
   for (Index = 0; Index < gNvmeOfNbftListIndex; Index++) {
     if (gNvmeOfNbftList[Index].FailTridInfo != NULL) {
