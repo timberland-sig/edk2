@@ -187,6 +187,7 @@ edk_sock_connect (
   } else {
     Tcp6IoConfig = &TcpIoConfig->Tcp6IoConfigData;
     edk_sock_strtoip6 (ip, &ip6_addr);
+    CopyMem (&Tcp6IoConfig->LocalIp, &SockContext->StationIp.v6, sizeof (EFI_IPv6_ADDRESS));
     CopyMem (&Tcp6IoConfig->RemoteIp, &ip6_addr, sizeof (EFI_IPv6_ADDRESS));
     Tcp6IoConfig->RemotePort  = port;
     Tcp6IoConfig->ActiveFlag  = TRUE;

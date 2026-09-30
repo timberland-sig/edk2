@@ -261,6 +261,8 @@ IScsiCreateConnection (
     }
   }
 
+  ZeroMem (&TcpIoConfig, sizeof (TcpIoConfig));
+
   if (!Conn->Ipv6Flag) {
     Tcp4IoConfig = &TcpIoConfig.Tcp4IoConfigData;
 
