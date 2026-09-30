@@ -1228,6 +1228,7 @@ NvmeOfCliProbeCallback (
   AttemptData = &Private->Attempt->Data;
   Context     = &EdkOpts->sock_ctx;
 
+  ZeroMem (&Context->StationIp, sizeof (Context->StationIp));
   Context->Controller = Private->Controller;
   Context->IsIp6      = AttemptData->SubsysConfigData.NvmeofIpMode == IP_MODE_IP6;
 
@@ -1249,6 +1250,8 @@ NvmeOfCliProbeCallback (
       &AttemptData->SubsysConfigData.NvmeofSubsysHostGateway.v4,
       sizeof (EFI_IPv4_ADDRESS)
       );
+  } else {
+    IP6_COPY_ADDRESS (&Context->StationIp.v6, &AttemptData->SubsysConfigData.NvmeofSubsysHostIP.v6);
   }
 
   return TRUE;
