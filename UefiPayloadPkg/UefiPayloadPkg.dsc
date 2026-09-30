@@ -938,6 +938,18 @@
 [Defines]
   DEFINE PLATFORMX64_ENABLE = TRUE
   !include NetworkPkg/Network.dsc.inc
+
+[LibraryClasses]
+!if $(NETWORK_NVMEOF_ENABLE) == TRUE
+  ShellCommandLib|ShellPkg/Library/UefiShellCommandLib/UefiShellCommandLib.inf
+  HandleParsingLib|ShellPkg/Library/UefiHandleParsingLib/UefiHandleParsingLib.inf
+  ShellCEntryLib|ShellPkg/Library/UefiShellCEntryLib/UefiShellCEntryLib.inf
+!if $(SHELL_TYPE) != BUILD_SHELL
+  ShellLib|ShellPkg/Library/UefiShellLib/UefiShellLib.inf
+  FileHandleLib|MdePkg/Library/UefiFileHandleLib/UefiFileHandleLib.inf
+!endif
+!endif
+
 !endif
 
 [Components.X64, Components.AARCH64]
