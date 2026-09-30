@@ -285,6 +285,7 @@ TcpIoCreateSocket (
     AccessPoint6->RemotePort  = ConfigData->Tcp6IoConfigData.RemotePort;
     AccessPoint6->ActiveFlag  = ConfigData->Tcp6IoConfigData.ActiveFlag;
 
+    IP6_COPY_ADDRESS (&AccessPoint6->StationAddress, &ConfigData->Tcp6IoConfigData.LocalIp);
     IP6_COPY_ADDRESS (&AccessPoint6->RemoteAddress, &ConfigData->Tcp6IoConfigData.RemoteIp);
 
     ASSERT (Tcp6 != NULL);
@@ -292,7 +293,11 @@ TcpIoCreateSocket (
     // Configure the TCP6 protocol.
     //
     Status = Tcp6->Configure (Tcp6, &Tcp6ConfigData);
-    if (Status == EFI_NO_MAPPING) {
+    if ((Status == EFI_NO_MAPPING) ||
+        ((Status == EFI_INVALID_PARAMETER) &&
+         !IsZeroBuffer (&AccessPoint6->StationAddress, sizeof (AccessPoint6->StationAddress))))
+    {
+      // A configured static address may still be undergoing duplicate address detection.
       Status = TcpIoGetMapping (Tcp6, &Tcp6ConfigData);
     }
 

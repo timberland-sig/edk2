@@ -34,6 +34,7 @@ typedef struct {
 } TCP4_IO_CONFIG_DATA;
 
 typedef struct {
+  EFI_IPv6_ADDRESS    LocalIp;
   UINT16              StationPort;
   EFI_IPv6_ADDRESS    RemoteIp;
   UINT16              RemotePort;
