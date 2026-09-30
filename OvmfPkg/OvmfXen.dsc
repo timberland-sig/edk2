@@ -209,6 +209,11 @@
   #
 !include NetworkPkg/NetworkLibs.dsc.inc
 
+!if $(NETWORK_NVMEOF_ENABLE) == TRUE
+  ShellCommandLib|ShellPkg/Library/UefiShellCommandLib/UefiShellCommandLib.inf
+  HandleParsingLib|ShellPkg/Library/UefiHandleParsingLib/UefiHandleParsingLib.inf
+!endif
+
 !include OvmfPkg/Include/Dsc/ShellLibs.dsc.inc
 !include OvmfPkg/Include/Dsc/OvmfTlsLibs.dsc.inc
 

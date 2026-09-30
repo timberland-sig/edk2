@@ -102,6 +102,11 @@
 !include MdePkg/MdeLibs.dsc.inc
 
 [LibraryClasses.common]
+!if $(NETWORK_NVMEOF_ENABLE) == TRUE
+  ShellCommandLib|ShellPkg/Library/UefiShellCommandLib/UefiShellCommandLib.inf
+  HandleParsingLib|ShellPkg/Library/UefiHandleParsingLib/UefiHandleParsingLib.inf
+!endif
+
   PlatformSecLib|OvmfPkg/RiscVVirt/Library/PlatformSecLib/PlatformSecLib.inf
 
   # Virtio Support

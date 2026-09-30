@@ -106,6 +106,12 @@
 
   # Networking Requirements
 !include NetworkPkg/NetworkLibs.dsc.inc
+
+!if $(NETWORK_NVMEOF_ENABLE) == TRUE
+  ShellCommandLib|ShellPkg/Library/UefiShellCommandLib/UefiShellCommandLib.inf
+  HandleParsingLib|ShellPkg/Library/UefiHandleParsingLib/UefiHandleParsingLib.inf
+!endif
+
 !if $(NETWORK_TLS_ENABLE) == TRUE
   TlsLib|CryptoPkg/Library/TlsLib/TlsLib.inf
 !endif
